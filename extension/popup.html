@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>秋招助手</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>秋招助手</h1>
+        <p id="statusText">正在连接本地服务…</p>
+      </div>
+      <span id="statusDot" class="dot"></span>
+    </header>
+
+    <nav>
+      <button class="tab active" data-tab="fill">自动填写</button>
+      <button class="tab" data-tab="profile">个人档案</button>
+      <button class="tab" data-tab="settings">设置</button>
+    </nav>
+
+    <section id="fill" class="panel active">
+      <div id="importSummary" class="card compact">正在读取本地档案…</div>
+      <label class="switch-row">
+        <input id="useAi" type="checkbox" checked />
+        <span>“扫描并自动填写全部”规则失败时调用 DeepSeek</span>
+      </label>
+      <button id="pickBtn" class="secondary">本地数据快捷填入</button>
+      <button id="scanBtn" class="primary">扫描并自动填写全部</button>
+      <div id="resultBox" class="result muted">可直接打开本地数据面板，或扫描并自动填写全部。</div>
+      <p class="hint">工具不会自动点击招聘网站的“提交”按钮。文档中的个人资料保存在本机 SQLite。</p>
+    </section>
+
+    <section id="profile" class="panel">
+      <form id="profileForm">
+        <h2>基本信息</h2>
+        <div class="grid2">
+          <label>中文姓名<input name="basic.name_cn" /></label>
+          <label>英文姓名<input name="basic.name_en" /></label>
+          <label>证件类型<input name="basic.id_type" /></label>
+          <label>证件号码<input name="basic.id_number" /></label>
+          <label>手机国家区号<input name="basic.phone_country_code" /></label>
+          <label>手机号<input name="basic.phone" /></label>
+          <label>邮箱<input name="basic.email" type="email" /></label>
+          <label>性别<input name="basic.gender" placeholder="男 / 女" /></label>
+          <label>生日<input name="basic.birthday" type="date" /></label>
+          <label>政治面貌<input name="basic.political_status" /></label>
+          <label>民族<input name="basic.ethnicity" /></label>
+          <label>身高（cm）<input name="basic.height_cm" inputmode="decimal" /></label>
+          <label>体重（kg）<input name="basic.weight_kg" inputmode="decimal" /></label>
+          <label>籍贯<input name="basic.hometown" /></label>
+          <label>生源地<input name="basic.student_origin" /></label>
+          <label>现居城市<input name="basic.current_city" /></label>
+          <label>婚姻情况<input name="basic.marital_status" /></label>
+          <label>健康状况<input name="basic.health_status" /></label>
+          <label class="wide">入学前户口所在地<input name="basic.pre_enrollment_household_location" /></label>
+          <label class="wide">现住址<input name="basic.current_address" /></label>
+          <label class="wide">通讯地址<input name="basic.mailing_address" /></label>
+          <label>邮政编码<input name="basic.postal_code" /></label>
+        </div>
+
+        <h2>最高教育经历</h2>
+        <div class="grid2">
+          <label>学校<input name="education[0].school" /></label>
+          <label>学历<input name="education[0].degree" /></label>
+          <label>学位<input name="education[0].academic_degree" /></label>
+          <label>研究方向<input name="education[0].research_direction" /></label>
+          <label>院系<input name="education[0].college" /></label>
+          <label>专业<input name="education[0].major" /></label>
+          <label>专业课程<input name="education[0].courses" /></label>
+          <label>入学时间<input name="education[0].start_date" type="date" /></label>
+          <label>毕业时间<input name="education[0].end_date" type="date" /></label>
+          <label>是否全日制<input name="education[0].full_time" /></label>
+          <label>成绩排名<input name="education[0].ranking" /></label>
+          <label>受教育类型<input name="education[0].education_type" /></label>
+          <label>学制（年）<input name="education[0].study_length_years" /></label>
+          <label>海外学习经历<input name="education[0].overseas_study_experience" /></label>
+          <label class="wide">毕业设计 / 论文<textarea name="education[0].graduation_project" rows="3"></textarea></label>
+        </div>
+
+        <details>
+          <summary>本科教育经历</summary>
+          <div class="grid2 details-body">
+            <label>学校<input name="education[1].school" /></label>
+            <label>学历<input name="education[1].degree" /></label>
+            <label>学位<input name="education[1].academic_degree" /></label>
+            <label>院系<input name="education[1].college" /></label>
+            <label>专业<input name="education[1].major" /></label>
+            <label>专业课程<input name="education[1].courses" /></label>
+            <label>入学时间<input name="education[1].start_date" type="date" /></label>
+            <label>毕业时间<input name="education[1].end_date" type="date" /></label>
+            <label>成绩排名<input name="education[1].ranking" /></label>
+            <label>受教育类型<input name="education[1].education_type" /></label>
+            <label>学制（年）<input name="education[1].study_length_years" /></label>
+            <label>海外学习经历<input name="education[1].overseas_study_experience" /></label>
+            <label class="wide">毕业设计 / 论文<textarea name="education[1].graduation_project" rows="3"></textarea></label>
+          </div>
+        </details>
+
+        <h2>实习经历</h2>
+        <details open>
+          <summary>最近一段实习</summary>
+          <div class="grid2 details-body">
+            <label>单位<input name="internships[0].company" /></label>
+            <label>城市<input name="internships[0].city" /></label>
+            <label>岗位<input name="internships[0].role" /></label>
+            <label>联系人<input name="internships[0].contact_name" /></label>
+            <label>开始时间<input name="internships[0].start_date" type="date" /></label>
+            <label>结束时间<input name="internships[0].end_date" type="date" /></label>
+            <label class="wide">联系电话<input name="internships[0].contact_phone" /></label>
+            <label class="wide">实践内容<textarea name="internships[0].description" rows="5"></textarea></label>
+          </div>
+        </details>
+        <details>
+          <summary>第二段实习</summary>
+          <div class="grid2 details-body">
+            <label>单位<input name="internships[1].company" /></label>
+            <label>城市<input name="internships[1].city" /></label>
+            <label>岗位<input name="internships[1].role" /></label>
+            <label>联系人<input name="internships[1].contact_name" /></label>
+            <label>开始时间<input name="internships[1].start_date" type="date" /></label>
+            <label>结束时间<input name="internships[1].end_date" type="date" /></label>
+            <label class="wide">联系电话<input name="internships[1].contact_phone" /></label>
+            <label class="wide">实践内容<textarea name="internships[1].description" rows="5"></textarea></label>
+          </div>
+        </details>
+        <details>
+          <summary>第三段实习</summary>
+          <div class="grid2 details-body">
+            <label>单位<input name="internships[2].company" /></label>
+            <label>城市<input name="internships[2].city" /></label>
+            <label>岗位<input name="internships[2].role" /></label>
+            <label>联系人<input name="internships[2].contact_name" /></label>
+            <label>开始时间<input name="internships[2].start_date" type="date" /></label>
+            <label>结束时间<input name="internships[2].end_date" type="date" /></label>
+            <label class="wide">联系电话<input name="internships[2].contact_phone" /></label>
+            <label class="wide">实践内容<textarea name="internships[2].description" rows="5"></textarea></label>
+          </div>
+        </details>
+
+        <h2>校园经历</h2>
+        <div class="grid2">
+          <label>是否为学生干部<input name="campus_experience.is_student_cadre" placeholder="是 / 否" /></label>
+          <label>开始时间<input name="campus_experience.start_date" type="date" /></label>
+          <label>结束时间<input name="campus_experience.end_date" type="date" /></label>
+          <label class="wide">校园经历主要内容<textarea name="campus_experience.description" rows="6"></textarea></label>
+        </div>
+
+        <h2>技能与性格</h2>
+        <div class="grid2">
+          <label>CET4<input name="skills.cet4" /></label>
+          <label>CET6<input name="skills.cet6" /></label>
+          <label class="wide">计算机水平<input name="skills.computer_level" /></label>
+          <label class="wide">技能证书<input name="skills.certificates" /></label>
+          <label class="wide">性格词<input name="personality.words" placeholder="稳重, 细心, 好学, 上进" /></label>
+        </div>
+
+        <details>
+          <summary>家庭及紧急联系人</summary>
+          <div class="grid2 details-body">
+            <label>父亲姓名<input name="family.members[0].name" /></label>
+            <label>父亲年龄<input name="family.members[0].age" /></label>
+            <label>父亲电话<input name="family.members[0].phone" /></label>
+            <label>父亲单位<input name="family.members[0].employer" /></label>
+            <label>父亲部门<input name="family.members[0].department" /></label>
+            <label>父亲职务<input name="family.members[0].position" /></label>
+            <label>父亲政治面貌<input name="family.members[0].political_status" /></label>
+            <label>父亲是否邮政系统职工<input name="family.members[0].is_china_post_employee" /></label>
+            <label>母亲姓名<input name="family.members[1].name" /></label>
+            <label>母亲年龄<input name="family.members[1].age" /></label>
+            <label>母亲电话<input name="family.members[1].phone" /></label>
+            <label>母亲单位<input name="family.members[1].employer" /></label>
+            <label>母亲部门<input name="family.members[1].department" /></label>
+            <label>母亲职务<input name="family.members[1].position" /></label>
+            <label>母亲政治面貌<input name="family.members[1].political_status" /></label>
+            <label>母亲是否邮政系统职工<input name="family.members[1].is_china_post_employee" /></label>
+            <label>紧急联系人<input name="family.emergency_contact.name" /></label>
+            <label>紧急联系人电话<input name="family.emergency_contact.phone" /></label>
+            <label class="wide">紧急联系人单位<input name="family.emergency_contact.employer" /></label>
+            <label class="wide">招商局/招商银行近亲属<input name="family.has_relative_in_cmb_group" placeholder="仅针对该集团问题" /></label>
+          </div>
+        </details>
+
+        <h2>求职偏好</h2>
+        <div class="grid2">
+          <label>意向城市<input name="job_preferences.cities" placeholder="北京, 上海, 杭州" /></label>
+          <label>意向岗位<input name="job_preferences.job_types" placeholder="算法工程师, 大模型算法" /></label>
+          <label>期望薪资<input name="job_preferences.salary" placeholder="如 30W" /></label>
+          <label>接受地点调剂<input name="job_preferences.accept_location_transfer" placeholder="是 / 否" /></label>
+        </div>
+
+        <div class="card compact">
+          <strong>文档中还保存了</strong>
+          <p id="hiddenProfileSummary">社团经历、个人荣誉、照片等结构化数据也已存入 SQLite，可供字段匹配和后续 AI 回答使用。</p>
+        </div>
+        <button class="primary" type="submit">保存到本地</button>
+        <div id="profileMsg" class="msg"></div>
+      </form>
+    </section>
+
+    <section id="settings" class="panel">
+      <label>DeepSeek 模型<input id="modelInput" placeholder="deepseek-v4-pro" /></label>
+      <button id="saveModelBtn" class="secondary">保存模型</button>
+      <div class="card">
+        <strong>API Key</strong>
+        <p>为避免把密钥放进浏览器插件，后端从项目根目录 <code>.env</code> 读取 <code>DEEPSEEK_API_KEY</code>。修改后重启后端。</p>
+      </div>
+    </section>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>
