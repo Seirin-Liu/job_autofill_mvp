@@ -132,7 +132,7 @@
   function render(){
     ensure('basic',{}); ensure('education',[]); ensure('internships',[]); ensure('projects',[]); ensure('student_activities',[]); ensure('awards',[]);
     ensure('campus_experience',{}); ensure('skills',{}); ensure('family',{members:[],emergency_contact:{}}); ensure('family.members',[]); ensure('family.emergency_contact',{});
-    ensure('self_evaluation',{content:''}); ensure('personality',{words:[]}); ensure('photos',{}); ensure('job_preferences',{cities:[],job_types:[]}); ensure('summaries',{});
+    ensure('self_evaluation',{content:''}); ensure('career_planning',{content:''}); ensure('personality',{words:[]}); ensure('photos',{}); ensure('job_preferences',{cities:[],job_types:[]}); ensure('summaries',{});
 
     let html='';
     html += section('基本信息','常用网申个人资料。',fieldsHtml('basic',basicFields));
@@ -155,6 +155,9 @@
     ]));
     html += section('自我评价','用于招聘系统中的自我评价、个人总结等长文本字段。',fieldsHtml('self_evaluation',[
       ['content','自我评价','textarea','wide']
+    ]));
+    html += section('职业规划','用于未来五年职业规划、职业发展规划等长文本字段。',fieldsHtml('career_planning',[
+      ['content','职业规划','textarea','wide']
     ]));
     html += section('性格、照片和求职偏好','数组字段可用逗号分隔。',
       `<div class="grid">

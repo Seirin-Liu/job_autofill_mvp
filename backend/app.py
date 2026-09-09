@@ -137,6 +137,7 @@ DEFAULT_PROFILE: Dict[str, Any] = {
         "emergency_contact": {"name": "", "employer": "", "position": "", "phone": ""},
     },
     "self_evaluation": {"content": ""},
+    "career_planning": {"content": ""},
     "personality": {"words": []},
     "photos": {"formal_photo": "", "life_photo": ""},
     "job_preferences": {
@@ -301,6 +302,7 @@ FIELD_DEFS: Dict[str, List[str]] = {
     "campus_experience.description": ["校园经历主要内容", "校园经历内容", "学生干部经历", "校园活动主要内容", "校园经历描述"],
 
     "self_evaluation.content": ["自我评价", "自我评价内容", "个人评价", "个人总结", "综合评价", "自我介绍", "self evaluation", "self assessment"],
+    "career_planning.content": ["职业规划", "职业发展规划", "未来职业规划", "未来五年职业规划", "五年职业规划", "就业规划", "职业目标", "career planning", "career plan"],
 
     "summaries.education_text": ["教育经历", "教育背景", "学习经历"],
     "summaries.internships_text": ["实习经历", "实习经验", "社会实践", "实践经历", "工作实践经历"],
@@ -443,6 +445,69 @@ def schema_merge(default: Any, current: Any) -> Any:
     return copy.deepcopy(current) if current is not None else copy.deepcopy(default)
 
 
+REPEATABLE_RECORD_SCHEMAS: Dict[str, Dict[str, Any]] = {
+    "education": copy.deepcopy(DEFAULT_PROFILE["education"][0]),
+    "internships": {
+        "company": "", "city": "", "role": "", "work_type": "",
+        "start_date": "", "end_date": "", "contact_name": "", "contact_phone": "",
+        "salary": "", "description": "",
+    },
+    "projects": {
+        "name": "", "type": "", "role": "", "start_date": "", "end_date": "",
+        "tech_stack": "", "description": "", "highlights": [], "result": "",
+    },
+    "student_activities": {
+        "organization": "", "role": "", "start_date": "", "end_date": "",
+        "activities": "", "description": "",
+    },
+    "awards": {
+        "date": "", "name": "", "type": "", "level": "", "reference": "", "details": "",
+    },
+}
+
+FAMILY_MEMBER_SCHEMA: Dict[str, Any] = {
+    "relation": "", "name": "", "age": "", "employer": "", "department": "",
+    "position": "", "phone": "", "political_status": "", "is_china_post_employee": "",
+}
+
+
+def normalize_profile_schema(current: Any) -> Dict[str, Any]:
+    """Return a profile containing every currently supported schema field.
+
+    Missing supported fields are added without overwriting existing values.
+    Repeated records are normalized item-by-item, so an older internship,
+    project, award, education or family record also receives newly added fields.
+    Unknown keys are preserved for backwards compatibility, but the web editor
+    only exposes fields defined by the current application schema.
+    """
+    result = schema_merge(DEFAULT_PROFILE, current if isinstance(current, dict) else {})
+
+    for collection, record_schema in REPEATABLE_RECORD_SCHEMAS.items():
+        records = result.get(collection)
+        if not isinstance(records, list):
+            records = []
+        result[collection] = [
+            schema_merge(record_schema, item)
+            for item in records
+            if isinstance(item, dict)
+        ]
+
+    family = result.get("family")
+    if not isinstance(family, dict):
+        family = copy.deepcopy(DEFAULT_PROFILE["family"])
+        result["family"] = family
+    members = family.get("members")
+    if not isinstance(members, list):
+        members = []
+    family["members"] = [
+        schema_merge(FAMILY_MEMBER_SCHEMA, item)
+        for item in members
+        if isinstance(item, dict)
+    ]
+
+    return result
+
+
 def seed_merge(current: Any, incoming: Any) -> Any:
     """Import the supplied document profile. Non-empty imported values win once."""
     if isinstance(incoming, dict):
@@ -488,19 +553,26 @@ def init_db() -> None:
         else:
             profile = copy.deepcopy(DEFAULT_PROFILE)
 
-        profile = schema_merge(DEFAULT_PROFILE, profile)
+        profile = normalize_profile_schema(profile)
 
         ensure_seed_file()
         seed = load_seed_profile()
         if seed:
+            # Older JSON files are upgraded in place: every supported missing
+            # field is added while existing user values are retained.
+            normalized_seed = normalize_profile_schema(seed)
+            if normalized_seed != seed:
+                write_seed_profile(normalized_seed)
+            seed = normalized_seed
+
             # Re-import the seed only when profile_seed.json actually changes.
-            # This removes the need to manually bump a hard-coded seed version for every data update.
             seed_hash = profile_seed_hash(seed)
             seed_marker = conn.execute(
                 "SELECT value FROM kv WHERE key=?", (SEED_HASH_KEY,)
             ).fetchone()
             if not seed_marker or seed_marker["value"] != seed_hash:
                 profile = seed_merge(profile, seed)
+                profile = normalize_profile_schema(profile)
                 conn.execute(
                     "INSERT INTO kv(key,value) VALUES(?, ?) "
                     "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
@@ -521,7 +593,7 @@ def init_db() -> None:
 
 init_db()
 
-app = FastAPI(title="Job Autofill Local Service", version="1.2.0")
+app = FastAPI(title="Job Autofill Local Service", version="1.3.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -1013,7 +1085,7 @@ def read_profile() -> Dict[str, Any]:
 def update_profile(payload: ProfilePayload) -> Dict[str, Any]:
     # The browser editor uses this endpoint as the single source of truth.
     # Save both SQLite (runtime reads) and profile_seed.json (human-editable source).
-    profile = schema_merge(DEFAULT_PROFILE, payload.profile)
+    profile = normalize_profile_schema(payload.profile)
     try:
         write_seed_profile(profile)
     except Exception as exc:

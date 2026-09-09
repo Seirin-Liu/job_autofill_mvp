@@ -40,6 +40,10 @@ if errorlevel 1 goto :fail
 
 if not exist ".env" copy /Y ".env.example" ".env" >nul
 
+echo Initializing local profile schema...
+".venv\Scripts\python.exe" -c "import backend.app"
+if errorlevel 1 goto :fail
+
 echo.
 echo Installation completed.
 echo Run start.bat to start the backend.

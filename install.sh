@@ -7,4 +7,6 @@ source .venv/bin/activate
 python -m pip install --upgrade pip
 pip install -r backend/requirements.txt
 [ -f .env ] || cp .env.example .env
+echo "正在初始化本地档案结构..."
+python -c "import backend.app"
 echo "安装完成。编辑 .env（可选）后运行 ./start.sh"
