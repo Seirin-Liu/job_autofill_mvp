@@ -7,6 +7,9 @@ if errorlevel 1 (
   exit /b 1
 )
 
+if not exist "data" mkdir "data"
+if not exist "data\assets" mkdir "data\assets"
+
 set "PY_CMD="
 where py >nul 2>nul
 if not errorlevel 1 set "PY_CMD=py -3"

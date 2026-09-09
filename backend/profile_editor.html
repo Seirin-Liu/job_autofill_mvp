@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>个人简历信息 - 秋招助手</title>
+  <style>
+    :root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#111827;background:#f5f6f8}
+    *{box-sizing:border-box}body{margin:0}.shell{max-width:1180px;margin:0 auto;padding:0 20px 48px}
+    .topbar{position:sticky;top:0;z-index:20;margin:0 -20px 18px;padding:14px 20px;background:rgba(255,255,255,.96);backdrop-filter:blur(8px);border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;gap:16px}
+    .title h1{font-size:22px;margin:0}.title p{font-size:13px;color:#6b7280;margin:4px 0 0}.actions{display:flex;align-items:center;gap:10px}.status{font-size:13px;color:#6b7280;min-width:84px;text-align:right}
+    button{font:inherit;cursor:pointer}.save{border:0;border-radius:9px;background:#111827;color:#fff;padding:10px 20px;font-weight:700}.save:disabled{opacity:.55;cursor:not-allowed}
+    .ghost{border:1px solid #d1d5db;border-radius:8px;background:#fff;color:#374151;padding:8px 12px}.danger{border:1px solid #fecaca;background:#fff;color:#b91c1c;border-radius:8px;padding:6px 10px}
+    .intro{margin:0 0 16px;padding:12px 14px;border:1px solid #dbeafe;background:#eff6ff;border-radius:10px;font-size:13px;color:#1e3a8a;line-height:1.6}
+    .section{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:18px;margin:14px 0}.section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}.section h2{font-size:17px;margin:0}.section-note{font-size:12px;color:#6b7280;margin-top:3px}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.field{display:grid;gap:6px;min-width:0}.field.wide{grid-column:1/-1}.field label{font-size:12px;color:#4b5563}.field input,.field textarea,.field select{width:100%;border:1px solid #d1d5db;border-radius:8px;padding:9px 10px;font:inherit;font-size:14px;background:#fff;color:#111827;outline:none}.field input:focus,.field textarea:focus,.field select:focus{border-color:#6b7280;box-shadow:0 0 0 2px rgba(107,114,128,.12)}.field textarea{resize:vertical;line-height:1.55;min-height:76px}
+    .records{display:grid;gap:12px}.record{border:1px solid #e5e7eb;border-radius:10px;padding:14px;background:#fafafa}.record-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}.record-title{font-size:14px;font-weight:700;color:#374151}.add{border:1px dashed #9ca3af;border-radius:8px;background:#fff;padding:7px 12px;color:#374151}
+    details{border:1px solid #e5e7eb;border-radius:10px;background:#fff;margin:14px 0}summary{cursor:pointer;padding:13px 16px;font-weight:700;color:#374151}.details-body{padding:0 16px 16px}.muted{color:#6b7280}.footer-note{font-size:12px;color:#6b7280;text-align:center;margin-top:22px}
+    @media(max-width:760px){.shell{padding:0 12px 32px}.topbar{margin:0 -12px;padding:12px}.grid{grid-template-columns:1fr}.field.wide{grid-column:auto}.status{display:none}.actions{gap:6px}.save{padding:9px 14px}}
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="topbar">
+      <div class="title">
+        <h1>个人简历信息</h1>
+        <p>修改后点击“保存”，会同时更新本地数据库和 <code>data/profile_seed.json</code></p>
+      </div>
+      <div class="actions">
+        <span id="saveStatus" class="status">正在读取…</span>
+        <button id="reloadBtn" class="ghost" type="button">重新读取</button>
+        <button id="saveBtn" class="save" type="button">保存</button>
+      </div>
+    </div>
+
+    <div class="intro">这里已经替代原来的测试表单页。所有修改都只写入本机项目目录；浏览器插件下一次读取本地档案时会直接使用保存后的数据。</div>
+
+    <div id="editor"></div>
+    <p class="footer-note">建议修改完成后先保存，再打开浏览器插件使用“本地数据快捷填入”。</p>
+  </div>
+
+<script>
+(() => {
+  const editor = document.getElementById('editor');
+  const saveBtn = document.getElementById('saveBtn');
+  const reloadBtn = document.getElementById('reloadBtn');
+  const saveStatus = document.getElementById('saveStatus');
+  let profile = {};
+
+  const basicFields = [
+    ['name_cn','中文姓名'],['name_en','英文姓名'],['id_type','证件类型'],['id_number','证件号码'],
+    ['phone_country_code','手机国家区号'],['phone','手机号'],['email','电子邮箱'],['gender','性别'],
+    ['birthday','出生日期','date'],['age','年龄'],['birth_place','出生地'],['political_status','政治面貌'],
+    ['party_join_date','入党团时间','date'],['ethnicity','民族'],['height_cm','身高(cm)'],['weight_kg','体重(kg)'],
+    ['hometown','籍贯'],['is_beijing_household','是否北京户口'],['household_location','户口所在地'],
+    ['student_origin','高考生源地'],['current_city','现居城市'],['current_address','现住址','text','wide'],
+    ['marital_status','婚姻状况'],['health_status','健康状况'],['pre_enrollment_household_location','入学前户口所在地','text','wide'],
+    ['mailing_address','通讯地址','text','wide'],['postal_code','邮政编码']
+  ];
+
+  const educationFields = [
+    ['school','学校名称'],['degree','学历'],['academic_degree','学位'],['college','院系'],['major','专业'],
+    ['research_direction','研究方向'],['courses','专业课程','textarea','wide'],['start_date','入学时间','date'],['end_date','毕业时间','date'],
+    ['expected_degree_date','拟取得学位时间','date'],['first_degree','第一学位'],['full_time','是否全日制'],['exchange_program','合作交流项目'],
+    ['gpa','GPA'],['ranking','专业/年级排名'],['education_type','受教育类型'],['study_length_years','学制'],
+    ['overseas_study_experience','海外学习经历'],['school_country','学校所属国家'],['is_main_study_experience','是否主要学习经历'],
+    ['graduation_project','毕业设计 / 论文','textarea','wide']
+  ];
+
+  const internshipFields = [
+    ['company','工作单位'],['city','所在城市'],['role','岗位'],['work_type','工作类型'],['start_date','开始时间','date'],['end_date','结束时间','date'],
+    ['contact_name','联系人'],['contact_phone','联系电话'],['salary','职位月薪(税前)'],['description','主要工作职责和业绩','textarea','wide']
+  ];
+
+  const projectFields = [
+    ['name','项目名称'],['type','项目类型'],['role','项目角色'],['start_date','开始时间'],['end_date','结束时间'],
+    ['tech_stack','技术栈','textarea','wide'],['description','项目内容 / 描述','textarea','wide'],['highlights','项目亮点（每行一条）','array-lines','wide'],
+    ['result','项目成果','textarea','wide']
+  ];
+
+  const activityFields = [
+    ['organization','组织 / 社团名称'],['role','职位'],['start_date','开始时间','date'],['end_date','结束时间','date'],
+    ['activities','活动项目','textarea','wide'],['description','职责说明','textarea','wide']
+  ];
+
+  const awardFields = [
+    ['date','时间','date'],['name','奖项名称'],['type','类型'],['level','级别'],['reference','期刊 / 专利 / 参考信息','text','wide'],['details','详细说明','textarea','wide']
+  ];
+
+  const familyFields = [
+    ['relation','与本人关系'],['name','姓名'],['age','年龄'],['employer','工作单位'],['department','工作部门'],['position','职务'],
+    ['phone','联系电话'],['political_status','政治面貌'],['is_china_post_employee','是否为中国邮政系统职工']
+  ];
+
+  const templates = {
+    education: {school:'',degree:'',academic_degree:'',college:'',major:'',research_direction:'',courses:'',start_date:'',end_date:'',expected_degree_date:'',first_degree:'',full_time:'',exchange_program:'',gpa:'',ranking:'',education_type:'',study_length_years:'',overseas_study_experience:'',graduation_project:'',school_country:'',is_main_study_experience:''},
+    internships: {company:'',city:'',role:'',work_type:'',start_date:'',end_date:'',contact_name:'',contact_phone:'',salary:'',description:''},
+    projects: {name:'',type:'',role:'',start_date:'',end_date:'',tech_stack:'',description:'',highlights:[],result:''},
+    student_activities: {organization:'',role:'',start_date:'',end_date:'',activities:'',description:''},
+    awards: {date:'',name:'',type:'',level:'',reference:'',details:''},
+    family: {relation:'',name:'',age:'',employer:'',department:'',position:'',phone:'',political_status:'',is_china_post_employee:''}
+  };
+
+  function esc(s){ return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function tokens(path){ return [...path.matchAll(/([^.[\]]+)|\[(\d+)\]/g)].map(m => m[1] ?? Number(m[2])); }
+  function getPath(path){ let cur=profile; for(const t of tokens(path)){ if(cur==null) return undefined; cur=cur[t]; } return cur; }
+  function setPath(path,value){ const ts=tokens(path); let cur=profile; ts.forEach((t,i)=>{ if(i===ts.length-1){cur[t]=value; return;} const n=ts[i+1]; if(cur[t]==null) cur[t]=typeof n==='number'?[]:{}; cur=cur[t]; }); }
+  function ensure(path, fallback){ const v=getPath(path); if(v==null){ setPath(path, structuredClone(fallback)); return getPath(path);} return v; }
+
+  function inputHtml(path, label, type='text', wide=''){
+    const raw=getPath(path);
+    const cls=wide==='wide'?'field wide':'field';
+    if(type==='textarea') return `<div class="${cls}"><label>${esc(label)}</label><textarea data-path="${esc(path)}">${esc(raw ?? '')}</textarea></div>`;
+    if(type==='array-lines') return `<div class="${cls}"><label>${esc(label)}</label><textarea data-path="${esc(path)}" data-array="lines">${esc(Array.isArray(raw)?raw.join('\n'):(raw ?? ''))}</textarea></div>`;
+    if(type==='array-comma') return `<div class="${cls}"><label>${esc(label)}</label><input data-path="${esc(path)}" data-array="comma" value="${esc(Array.isArray(raw)?raw.join(', '):(raw ?? ''))}" /></div>`;
+    const safeType=(type==='date' && /^\d{4}-\d{2}-\d{2}$/.test(String(raw||'')))?'date':'text';
+    return `<div class="${cls}"><label>${esc(label)}</label><input type="${safeType}" data-path="${esc(path)}" value="${esc(raw ?? '')}" /></div>`;
+  }
+
+  function fieldsHtml(base, fields){ return `<div class="grid">${fields.map(([k,l,t='text',w=''])=>inputHtml(`${base}.${k}`,l,t,w)).join('')}</div>`; }
+  function section(title, note, body, extra=''){ return `<section class="section"><div class="section-head"><div><h2>${esc(title)}</h2>${note?`<div class="section-note">${esc(note)}</div>`:''}</div>${extra}</div>${body}</section>`; }
+
+  function repeatable(path, title, fields, template, labelFn){
+    const arr=ensure(path, []);
+    const cards=arr.map((item,i)=>{
+      const label=labelFn?.(item,i) || `第 ${i+1} 条`;
+      return `<div class="record"><div class="record-head"><div class="record-title">${esc(label)}</div><button type="button" class="danger" data-remove="${esc(path)}" data-index="${i}">删除</button></div>${fieldsHtml(`${path}[${i}]`,fields)}</div>`;
+    }).join('');
+    return section(title, `共 ${arr.length} 条，可新增、删除并直接修改。`, `<div class="records">${cards || '<div class="muted">暂无数据</div>'}</div>`, `<button type="button" class="add" data-add="${esc(path)}" data-template="${esc(JSON.stringify(template))}">＋ 添加</button>`);
+  }
+
+  function render(){
+    ensure('basic',{}); ensure('education',[]); ensure('internships',[]); ensure('projects',[]); ensure('student_activities',[]); ensure('awards',[]);
+    ensure('campus_experience',{}); ensure('skills',{}); ensure('family',{members:[],emergency_contact:{}}); ensure('family.members',[]); ensure('family.emergency_contact',{});
+    ensure('personality',{words:[]}); ensure('photos',{}); ensure('job_preferences',{cities:[],job_types:[]}); ensure('summaries',{});
+
+    let html='';
+    html += section('基本信息','常用网申个人资料。',fieldsHtml('basic',basicFields));
+    html += repeatable('education','教育经历',educationFields,templates.education,(r,i)=>r.school?`${r.school} · ${r.degree||''}`:`第 ${i+1} 段教育经历`);
+    html += repeatable('internships','实习（工作）经历',internshipFields,templates.internships,(r,i)=>r.company?`${r.company} · ${r.role||''}`:`第 ${i+1} 段实习`);
+    html += repeatable('projects','项目与科研经历',projectFields,templates.projects,(r,i)=>r.name||`第 ${i+1} 个项目`);
+    html += section('校园经历','学生干部等核心校园经历。',fieldsHtml('campus_experience',[
+      ['is_student_cadre','是否为学生干部'],['start_date','开始时间','date'],['end_date','结束时间','date'],['description','校园经历主要内容','textarea','wide']
+    ]));
+    html += repeatable('student_activities','学生社团活动',activityFields,templates.student_activities,(r,i)=>r.organization?`${r.organization} · ${r.role||''}`:`第 ${i+1} 条社团经历`);
+    html += section('技能水平','语言、计算机能力和证书。',fieldsHtml('skills',[
+      ['cet4','CET4'],['cet6','CET6'],['tem4','TEM4'],['tem8','TEM8'],['other_language','其他外语'],['computer_level','计算机水平','textarea','wide'],['certificates','技能证书','textarea','wide']
+    ]));
+    html += repeatable('awards','获奖经历',awardFields,templates.awards,(r,i)=>r.name||`第 ${i+1} 条奖项`);
+    html += repeatable('family.members','家庭成员',familyFields,templates.family,(r,i)=>r.name?`${r.relation||'亲属'} · ${r.name}`:`第 ${i+1} 位家庭成员`);
+    html += section('家庭补充信息','紧急联系人和特定集团近亲属信息。',fieldsHtml('family',[
+      ['has_relative_in_cmb_group','是否有近亲属在招商局/招商银行集团','text','wide']
+    ]) + '<div style="height:12px"></div>' + fieldsHtml('family.emergency_contact',[
+      ['name','紧急联系人姓名'],['employer','紧急联系人单位'],['position','紧急联系人职务'],['phone','紧急联系人电话']
+    ]));
+    html += section('性格、照片和求职偏好','数组字段可用逗号分隔。',
+      `<div class="grid">
+        ${inputHtml('personality.words','性格词','array-comma','wide')}
+        ${inputHtml('photos.formal_photo','证件照路径')}${inputHtml('photos.life_photo','生活照路径')}
+        ${inputHtml('job_preferences.cities','意向城市','array-comma')}${inputHtml('job_preferences.job_types','意向岗位','array-comma')}
+        ${inputHtml('job_preferences.salary','期望薪资')}${inputHtml('job_preferences.accept_location_transfer','是否接受地点调剂')}
+      </div>`);
+    html += `<details><summary>汇总文本（用于直接填写长文本框）</summary><div class="details-body">${fieldsHtml('summaries',[
+      ['education_text','教育经历汇总','textarea','wide'],['internships_text','实习经历汇总','textarea','wide'],['projects_text','项目/科研经历汇总','textarea','wide'],
+      ['student_activities_text','校园/社团经历汇总','textarea','wide'],['awards_text','获奖经历汇总','textarea','wide'],['skills_text','技能汇总','textarea','wide'],['personality_text','性格描述','textarea','wide']
+    ])}</div></details>`;
+
+    editor.innerHTML=html;
+    editor.querySelectorAll('[data-path]').forEach(el=>{
+      el.addEventListener('input',()=>{
+        let value=el.value;
+        if(el.dataset.array==='lines') value=value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+        if(el.dataset.array==='comma') value=value.split(/[,，]/).map(x=>x.trim()).filter(Boolean);
+        setPath(el.dataset.path,value);
+        saveStatus.textContent='有未保存修改';
+      });
+    });
+    editor.querySelectorAll('[data-add]').forEach(btn=>btn.addEventListener('click',()=>{
+      const path=btn.dataset.add; const arr=ensure(path,[]); arr.push(JSON.parse(btn.dataset.template)); saveStatus.textContent='有未保存修改'; render();
+    }));
+    editor.querySelectorAll('[data-remove]').forEach(btn=>btn.addEventListener('click',()=>{
+      const arr=getPath(btn.dataset.remove); if(Array.isArray(arr)){arr.splice(Number(btn.dataset.index),1); saveStatus.textContent='有未保存修改'; render();}
+    }));
+  }
+
+  async function load(){
+    saveStatus.textContent='正在读取…';
+    saveBtn.disabled=true;
+    try{
+      const r=await fetch('/api/profile',{cache:'no-store'});
+      if(!r.ok) throw new Error(`HTTP ${r.status}`);
+      profile=(await r.json()).profile || {};
+      render();
+      saveStatus.textContent='已读取';
+    }catch(e){
+      editor.innerHTML=`<section class="section"><strong>读取失败</strong><p class="muted">${esc(e.message)}</p></section>`;
+      saveStatus.textContent='读取失败';
+    }finally{ saveBtn.disabled=false; }
+  }
+
+  async function save(){
+    saveBtn.disabled=true; reloadBtn.disabled=true; saveStatus.textContent='保存中…';
+    try{
+      const r=await fetch('/api/profile',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({profile})});
+      const body=await r.json().catch(()=>({}));
+      if(!r.ok) throw new Error(body.detail || `HTTP ${r.status}`);
+      profile=body.profile || profile;
+      saveStatus.textContent='已保存到 JSON';
+      setTimeout(()=>{ if(saveStatus.textContent==='已保存到 JSON') saveStatus.textContent='已保存'; },1800);
+    }catch(e){
+      saveStatus.textContent='保存失败';
+      alert(`保存失败：${e.message}`);
+    }finally{ saveBtn.disabled=false; reloadBtn.disabled=false; }
+  }
+
+  saveBtn.addEventListener('click',save);
+  reloadBtn.addEventListener('click',()=>{ if(confirm('重新读取会丢弃尚未保存的修改，是否继续？')) load(); });
+  load();
+})();
+</script>
+</body>
+</html>

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -e
 cd "$(dirname "$0")"
+mkdir -p data/assets
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip

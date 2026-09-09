@@ -7,6 +7,9 @@ if errorlevel 1 (
   exit /b 1
 )
 
+if not exist "data" mkdir "data"
+if not exist "data\assets" mkdir "data\assets"
+
 if not exist ".venv\Scripts\python.exe" (
   echo Virtual environment not found.
   echo Please run install.bat first.

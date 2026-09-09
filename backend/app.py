@@ -27,6 +27,7 @@ DB_PATH = DATA_DIR / "autofill.db"
 SEED_PATH = DATA_DIR / "profile_seed.json"
 SEED_HASH_KEY = "profile_seed_hash"
 ENV_PATH = ROOT / ".env"
+EDITOR_PATH = ROOT / "backend" / "profile_editor.html"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -396,6 +397,25 @@ def db() -> sqlite3.Connection:
     return conn
 
 
+def profile_seed_hash(profile: Dict[str, Any]) -> str:
+    canonical = json.dumps(profile, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def write_seed_profile(profile: Dict[str, Any]) -> None:
+    """Atomically persist the editable profile to data/profile_seed.json."""
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = SEED_PATH.with_suffix(SEED_PATH.suffix + ".tmp")
+    tmp.write_text(json.dumps(profile, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    os.replace(tmp, SEED_PATH)
+
+
+def ensure_seed_file() -> None:
+    """Create an empty profile_seed.json on first run when data/ is new."""
+    if not SEED_PATH.exists():
+        write_seed_profile(copy.deepcopy(DEFAULT_PROFILE))
+
+
 def load_seed_profile() -> Optional[Dict[str, Any]]:
     if not SEED_PATH.exists():
         return None
@@ -467,12 +487,12 @@ def init_db() -> None:
 
         profile = schema_merge(DEFAULT_PROFILE, profile)
 
+        ensure_seed_file()
         seed = load_seed_profile()
         if seed:
             # Re-import the seed only when profile_seed.json actually changes.
             # This removes the need to manually bump a hard-coded seed version for every data update.
-            canonical_seed = json.dumps(seed, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-            seed_hash = hashlib.sha256(canonical_seed.encode("utf-8")).hexdigest()
+            seed_hash = profile_seed_hash(seed)
             seed_marker = conn.execute(
                 "SELECT value FROM kv WHERE key=?", (SEED_HASH_KEY,)
             ).fetchone()
@@ -498,7 +518,7 @@ def init_db() -> None:
 
 init_db()
 
-app = FastAPI(title="Job Autofill Local Service", version="1.0.0")
+app = FastAPI(title="Job Autofill Local Service", version="1.1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -969,6 +989,7 @@ def status() -> Dict[str, Any]:
     return {
         "ok": True,
         "db": str(DB_PATH),
+        "profile_seed": str(SEED_PATH),
         "env_encoding": ENV_ENCODING,
         "deepseek_configured": bool(os.getenv("DEEPSEEK_API_KEY", "").strip()),
         "model": get_model(),
@@ -987,14 +1008,26 @@ def read_profile() -> Dict[str, Any]:
 
 @app.put("/api/profile")
 def update_profile(payload: ProfilePayload) -> Dict[str, Any]:
+    # The browser editor uses this endpoint as the single source of truth.
+    # Save both SQLite (runtime reads) and profile_seed.json (human-editable source).
     profile = schema_merge(DEFAULT_PROFILE, payload.profile)
+    try:
+        write_seed_profile(profile)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"profile_seed.json 保存失败：{exc}") from exc
+
+    seed_hash = profile_seed_hash(profile)
     with db() as conn:
         conn.execute(
             "INSERT INTO kv(key, value) VALUES('profile', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
             (json.dumps(profile, ensure_ascii=False),),
         )
+        conn.execute(
+            "INSERT INTO kv(key,value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            (SEED_HASH_KEY, seed_hash),
+        )
         conn.commit()
-    return {"ok": True, "profile": profile}
+    return {"ok": True, "profile": profile, "seed_path": str(SEED_PATH)}
 
 
 @app.put("/api/model")
@@ -1156,141 +1189,12 @@ def match_fields(req: MatchRequest) -> Dict[str, Any]:
     }
 
 
-@app.get("/demo", response_class=HTMLResponse)
-def demo() -> str:
-    return """
-<!doctype html>
-<html lang="zh-CN">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>秋招助手 Demo</title>
-<style>
-body{font-family:system-ui,-apple-system,sans-serif;max-width:1000px;margin:40px auto;padding:0 20px;color:#222}
-form{display:grid;gap:16px}.row,.form-item{display:grid;gap:6px}input,select,textarea{padding:10px;border:1px solid #bbb;border-radius:8px;font-size:15px}
-fieldset,.repeat-section{border:1px solid #ddd;border-radius:10px;padding:16px;margin:22px 0}button{padding:10px 18px;cursor:pointer}.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-.section-head{display:flex;justify-content:space-between;align-items:center;gap:16px}.editor{margin-top:16px;padding-top:16px;border-top:1px dashed #ccc}.editor-actions{display:flex;gap:12px;margin-top:14px}.record{padding:10px 0;border-top:1px solid #eee}.muted{color:#777}
-@media(max-width:650px){.grid{grid-template-columns:1fr}}
-</style>
-</head>
-<body>
-<h1>秋招表单测试页</h1>
-<p>当前项目已带入本地档案。插件会先填写普通字段，再自动处理需要“添加 → 填写 → 确认 → 再添加”的重复经历。</p>
-<form id="basic-form">
-  <div class="grid">
-    <div class="row"><label for="cn">中文姓名</label><input id="cn" name="real_name" placeholder="请输入中文姓名" /></div>
-    <div class="row"><label for="phone">手机号码</label><input id="phone" name="mobile" placeholder="请输入手机号" /></div>
-    <div class="row"><label for="mail">电子邮箱</label><input id="mail" type="email" name="email" /></div>
-    <div class="row"><label for="ethnicity">民族</label><input id="ethnicity" name="ethnicity" /></div>
-    <div class="row"><label for="address">现住址</label><input id="address" name="current_address" /></div>
-    <div class="row"><label for="marital">婚姻情况</label><select id="marital"><option value="">请选择</option><option>未婚</option><option>已婚</option></select></div>
-    <div class="row"><label for="school">毕业院校</label><input id="school" name="school" /></div>
-    <div class="row"><label for="major">所学专业</label><input id="major" name="major" /></div>
-    <div class="row"><label for="degree">最高学历</label><select id="degree" name="degree"><option value="">请选择</option><option>大学本科</option><option>硕士研究生</option><option>博士研究生</option></select></div>
-    <div class="row"><label for="undergrad">本科院校</label><input id="undergrad" name="undergraduate_school" /></div>
-    <div class="row"><label for="cet6">CET6成绩</label><input id="cet6" name="cet6" /></div>
-    <div class="row"><label for="emergency">紧急联系人姓名</label><input id="emergency" name="emergency_contact" /></div>
-  </div>
-  <fieldset><legend>性别</legend><label><input type="radio" name="gender" value="男" /> 男</label> <label><input type="radio" name="gender" value="女" /> 女</label></fieldset>
-</form>
-
-<section id="internship-section" class="repeat-section">
-  <div class="section-head"><h2>实习（工作）及社会经历</h2><button type="button" class="top-add" data-add="internship">＋ 添加</button></div>
-  <div class="muted">测试“逐条添加”流程。插件应自动录入 3 条实习。</div>
-  <div class="records" data-records="internship"></div>
-  <div class="editor-host" data-editor="internship"></div>
-</section>
-
-<section id="award-section" class="repeat-section">
-  <div class="section-head"><h2>获奖经历</h2><button type="button" class="top-add" data-add="award">＋ 添加</button></div>
-  <div class="muted">插件应自动录入本地档案中的 6 条奖项。</div>
-  <div class="records" data-records="award"></div>
-  <div class="editor-host" data-editor="award"></div>
-</section>
-<section id="family-section" class="repeat-section">
-  <div class="section-head"><h2>家庭关系</h2><button type="button" class="top-add" data-add="family">＋ 添加</button></div>
-  <div class="muted">插件应先添加父亲，再添加母亲。</div>
-  <div class="records" data-records="family"></div>
-  <div class="editor-host" data-editor="family"></div>
-</section>
-
-<script>
-(function(){
-  const internshipEditor = `
-    <div class="editor internship-editor">
-      <div class="grid">
-        <div class="form-item"><label>工作类型</label><select name="work_type"><option value="">请选择工作类型</option><option>实习</option><option>全职</option><option>兼职</option></select></div>
-        <div class="form-item"><label>工作单位</label><input name="company" placeholder="请填写工作单位"></div>
-        <div class="form-item"><label>岗位</label><input name="role" placeholder="请填写岗位"></div>
-        <div class="form-item"><label>入职时间</label><input name="start_date" placeholder="请选择入职时间"></div>
-        <div class="form-item"><label>离职时间</label><input name="end_date" placeholder="请选择离职时间"></div>
-        <div class="form-item"><label>主要工作职责和业绩</label><textarea name="description" placeholder="请填写主要工作职责和业绩"></textarea></div>
-        <div class="form-item"><label>职位月薪(税前)</label><input name="salary" placeholder="请选择您在职期间的职位月薪"></div>
-      </div>
-      <div class="editor-actions"><button type="button" class="confirm-add">添加</button><button type="button" class="cancel-add">取消</button></div>
-    </div>`;
-  const awardEditor = `
-    <div class="editor award-editor">
-      <div class="grid">
-        <div class="form-item"><label>时间</label><input name="date" placeholder="请选择时间"></div>
-        <div class="form-item"><label>奖项名称</label><input name="name" placeholder="请填写奖项名称"></div>
-      </div>
-      <div class="editor-actions"><button type="button" class="confirm-add">添加</button><button type="button" class="cancel-add">取消</button></div>
-    </div>`;
-  const familyEditor = `
-    <div class="editor family-editor">
-      <div class="grid">
-        <div class="form-item"><label>与本人关系</label><select name="relation"><option value="">请选择</option><option>父亲</option><option>母亲</option></select></div>
-        <div class="form-item"><label>亲属姓名</label><input name="name" placeholder="请填写亲属姓名"></div>
-        <div class="form-item"><label>年龄</label><input name="age" placeholder="请填写年龄"></div>
-        <div class="form-item"><label>工作单位</label><input name="employer" placeholder="请填写工作单位"></div>
-        <div class="form-item"><label>工作部门</label><input name="department" placeholder="请填写工作部门"></div>
-        <div class="form-item"><label>职务</label><input name="position" placeholder="请填写职务"></div>
-        <div class="form-item"><label>联系电话</label><input name="phone" placeholder="请填写联系电话"></div>
-        <div class="form-item"><label>政治面貌</label><select name="political_status"><option value="">请选择</option><option>群众</option><option>中共党员</option></select></div>
-        <div class="form-item"><label>是否为中国邮政系统职工</label><select name="is_china_post_employee"><option value="">请选择</option><option>是</option><option>否</option></select></div>
-      </div>
-      <div class="editor-actions"><button type="button" class="confirm-add">添加</button><button type="button" class="cancel-add">取消</button></div>
-    </div>`;
-
-  function openEditor(kind){
-    const host=document.querySelector(`[data-editor="${kind}"]`);
-    if(host.querySelector('.editor')) return;
-    host.innerHTML=kind==='internship'?internshipEditor:(kind==='award'?awardEditor:familyEditor);
-    const editor=host.querySelector('.editor');
-    editor.querySelector('.cancel-add').addEventListener('click',()=>host.innerHTML='');
-    editor.querySelector('.confirm-add').addEventListener('click',()=>{
-      const values=Object.fromEntries([...editor.querySelectorAll('[name]')].map(x=>[x.name,x.value]));
-      const identity=kind==='internship'?values.company:values.name;
-      if(!identity) return;
-      const row=document.createElement('div');
-      row.className='record';
-      row.textContent=kind==='internship'
-        ? `${values.company}｜${values.role}｜${values.start_date} ~ ${values.end_date}`
-        : (kind==='award' ? `${values.date}｜${values.name}` : `${values.relation}｜${values.name}｜${values.employer}｜${values.phone}`);
-      document.querySelector(`[data-records="${kind}"]`).appendChild(row);
-      host.innerHTML='';
-    });
-  }
-  document.querySelector('[data-add="internship"]').addEventListener('click',()=>openEditor('internship'));
-  document.querySelector('[data-add="award"]').addEventListener('click',()=>openEditor('award'));
-  document.querySelector('[data-add="family"]').addEventListener('click',()=>openEditor('family'));
-})();
-</script>
-</body>
-</html>
-"""
-
-
 @app.get("/", response_class=HTMLResponse)
-def root() -> str:
-    profile = get_profile()
-    name = get_by_path(profile, "basic.name_cn") or "未设置"
-    return f"""
-<!doctype html><html lang='zh-CN'><meta charset='utf-8'><title>Job Autofill</title>
-<body style='font-family:system-ui;max-width:720px;margin:40px auto;padding:0 20px'>
-<h1>Job Autofill Local Service</h1>
-<p>服务已启动。当前档案：<strong>{name}</strong></p>
-<ul><li><a href='/demo'>测试表单 /demo</a></li><li><a href='/docs'>API 文档 /docs</a></li></ul>
-</body></html>
-"""
+@app.get("/demo", response_class=HTMLResponse)
+@app.get("/profile", response_class=HTMLResponse)
+def profile_editor() -> str:
+    """Local resume editor. /demo is kept as a compatibility alias."""
+    try:
+        return EDITOR_PATH.read_text(encoding="utf-8")
+    except Exception as exc:
+        return f"<h1>Profile editor unavailable</h1><pre>{exc}</pre>"
