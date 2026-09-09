@@ -30,6 +30,24 @@
       },
       editorHints: ['工作单位', '岗位', '入职时间', '离职时间', '主要工作职责'],
     },
+    projects: {
+      sectionAliases: ['项目经历', '项目经验', '科研经历', '项目与科研经历', '科研项目', '主要项目'],
+      identityKey: 'name',
+      defaults: {},
+      requiredKeys: ['name', 'start_date', 'end_date', 'description'],
+      signatureKeys: ['name', 'start_date', 'end_date'],
+      fields: {
+        name: ['项目名称', '课题名称', '科研项目名称', '名称'],
+        type: ['项目类型', '经历类型', '项目类别', '类型'],
+        role: ['项目角色', '担任角色', '职责', '角色'],
+        start_date: ['项目开始时间', '开始时间', '起始时间', '开始日期'],
+        end_date: ['项目结束时间', '结束时间', '终止时间', '结束日期'],
+        tech_stack: ['技术栈', '项目技术栈', '使用技术', '技术框架', '开发技术'],
+        description: ['项目内容', '项目描述', '项目简介', '主要内容', '项目职责'],
+        result: ['项目成果', '科研成果', '论文成果', '项目业绩', '成果']
+      },
+      editorHints: ['项目名称', '开始时间', '结束时间', '项目内容'],
+    },
     awards: {
       sectionAliases: ['获奖经历', '获奖情况', '奖励经历', '荣誉奖励', '奖项经历', '个人荣誉'],
       identityKey: 'name',
@@ -1102,8 +1120,10 @@
     const items = [];
     const basicLabels = {
       name_cn: '姓名', name_en: '英文姓名', id_type: '证件类型', id_number: '证件号码', phone_country_code: '手机国家区号',
-      phone: '手机号码', email: '电子邮箱', gender: '性别', birthday: '出生日期', political_status: '政治面貌', ethnicity: '民族',
-      height_cm: '身高(cm)', weight_kg: '体重(kg)', hometown: '籍贯', student_origin: '生源地', current_city: '现居城市',
+      phone: '手机号码', email: '电子邮箱', gender: '性别', birthday: '出生日期', age: '年龄', birth_place: '出生地',
+      political_status: '政治面貌', party_join_date: '入党团时间', ethnicity: '民族',
+      height_cm: '身高(cm)', weight_kg: '体重(kg)', hometown: '籍贯', is_beijing_household: '是否北京户口',
+      household_location: '户口所在地', student_origin: '高考生源地', current_city: '现居城市',
       current_address: '现住址', marital_status: '婚姻情况', health_status: '健康状况', pre_enrollment_household_location: '入学前户口所在地',
       mailing_address: '通讯地址', postal_code: '邮政编码'
     };
@@ -1111,8 +1131,12 @@
 
     const eduLabels = {
       school: '学校名称', degree: '学历', academic_degree: '学位', college: '院系', major: '专业', research_direction: '研究方向', courses: '专业课程',
-      start_date: '入学时间', end_date: '毕业时间', full_time: '是否全日制', gpa: 'GPA', ranking: '专业排名', education_type: '受教育类型',
-      study_length_years: '学制', overseas_study_experience: '海外学习经历', graduation_project: '毕业设计/论文'
+      start_date: '入学时间', end_date: '毕业时间', expected_degree_date: '拟取得学位时间',
+      first_degree: '第一学位', full_time: '是否全日制', exchange_program: '合作交流项目',
+      gpa: 'GPA', ranking: '专业/年级排名', education_type: '受教育类型',
+      study_length_years: '学制', overseas_study_experience: '海外学习经历',
+      school_country: '学校所属国家', is_main_study_experience: '是否主要学习经历',
+      graduation_project: '毕业设计/论文'
     };
     (profile.education || []).forEach((record, index) => {
       const tag = clean(record?.degree || record?.school) || `第${index + 1}段`;
@@ -1123,6 +1147,15 @@
     (profile.internships || []).forEach((record, index) => {
       const tag = clean(record?.company) || `第${index + 1}段`;
       for (const [key, label] of Object.entries(internLabels)) pushPickerItem(items, `实习经历 · ${tag}`, label, `internships[${index}].${key}`, record?.[key]);
+    });
+
+    const projectLabels = {
+      name: '项目名称', type: '项目类型', role: '项目角色', start_date: '开始时间', end_date: '结束时间',
+      tech_stack: '技术栈', description: '项目内容/描述', highlights: '项目亮点', result: '项目成果'
+    };
+    (profile.projects || []).forEach((record, index) => {
+      const tag = clean(record?.name) || `第${index + 1}个项目`;
+      for (const [key, label] of Object.entries(projectLabels)) pushPickerItem(items, `项目经历 · ${tag}`, label, `projects[${index}].${key}`, record?.[key]);
     });
 
     const campusLabels = {is_student_cadre: '是否为学生干部', start_date: '开始时间', end_date: '结束时间', description: '校园经历主要内容'};
@@ -1152,7 +1185,7 @@
     pushPickerItem(items, '求职偏好', '期望薪资', 'job_preferences.salary', profile.job_preferences?.salary);
     pushPickerItem(items, '求职偏好', '接受地点调剂', 'job_preferences.accept_location_transfer', profile.job_preferences?.accept_location_transfer);
 
-    const summaryLabels = {education_text: '教育经历汇总', internships_text: '实习经历汇总', student_activities_text: '校园/社团经历汇总', awards_text: '获奖经历汇总', skills_text: '技能汇总', personality_text: '性格描述'};
+    const summaryLabels = {education_text: '教育经历汇总', internships_text: '实习经历汇总', projects_text: '项目/科研经历汇总', student_activities_text: '校园/社团经历汇总', awards_text: '获奖经历汇总', skills_text: '技能汇总', personality_text: '性格描述'};
     for (const [key, label] of Object.entries(summaryLabels)) pushPickerItem(items, '长文本', label, `summaries.${key}`, profile.summaries?.[key]);
     return items;
   }
@@ -1175,7 +1208,7 @@
 
   async function openFieldPicker() {
     closeFieldPicker();
-    const response = await fetch(`${API}/api/profile`);
+    const response = await fetch(`${API}/api/profile`, {cache: 'no-store'});
     if (!response.ok) throw new Error(`本地服务返回 ${response.status}`);
     const data = await response.json();
     const items = profilePickerItems(data.profile || {});
@@ -1300,21 +1333,25 @@
 
     let profile = {};
     try {
-      const p = await fetch(`${API}/api/profile`);
+      const p = await fetch(`${API}/api/profile`, {cache: 'no-store'});
       if (p.ok) profile = (await p.json()).profile || {};
     } catch (_) {}
 
     const internships = await fillRepeatableCollection('internships', profile.internships || [], !!useAi);
     // A failed editor is normally still open. Never let the next collection write into it.
-    const awards = internships.stopped && internships.failed > 0
+    const projects = internships.stopped && internships.failed > 0
+      ? blockedRepeatable('projects', profile.projects || [], 'blocked-by-prior-repeatable-failure')
+      : await fillRepeatableCollection('projects', profile.projects || [], !!useAi);
+    const beforeAwardsFailed = (internships.stopped && internships.failed > 0) || (projects.stopped && projects.failed > 0);
+    const awards = beforeAwardsFailed
       ? blockedRepeatable('awards', profile.awards || [], 'blocked-by-prior-repeatable-failure')
       : await fillRepeatableCollection('awards', profile.awards || [], !!useAi);
-    const priorFailed = (internships.stopped && internships.failed > 0) || (awards.stopped && awards.failed > 0);
+    const priorFailed = beforeAwardsFailed || (awards.stopped && awards.failed > 0);
     const family = priorFailed
       ? blockedRepeatable('family', profile.family?.members || [], 'blocked-by-prior-repeatable-failure')
       : await fillRepeatableCollection('family', profile.family?.members || [], !!useAi);
 
-    return {...data.stats, filled, repeatable: {internships, awards, family}};
+    return {...data.stats, filled, repeatable: {internships, projects, awards, family}};
   }
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {

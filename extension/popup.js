@@ -22,8 +22,10 @@ for (const tab of document.querySelectorAll('.tab')) {
 }
 
 async function api(path, options = {}) {
+  const method = String(options.method || 'GET').toUpperCase();
   const response = await fetch(`${API}${path}`, {
     headers: {'Content-Type': 'application/json', ...(options.headers || {})},
+    ...(method === 'GET' ? {cache: 'no-store'} : {}),
     ...options,
   });
   if (!response.ok) throw new Error(await response.text());
@@ -59,6 +61,7 @@ function profileCounts(profile) {
   return {
     education: Array.isArray(profile.education) ? profile.education.length : 0,
     internships: Array.isArray(profile.internships) ? profile.internships.length : 0,
+    projects: Array.isArray(profile.projects) ? profile.projects.length : 0,
     activities: Array.isArray(profile.student_activities) ? profile.student_activities.length : 0,
     campus: profile.campus_experience?.description ? 1 : 0,
     awards: Array.isArray(profile.awards) ? profile.awards.length : 0,
@@ -94,7 +97,7 @@ async function loadProfile() {
     }
     const counts = profileCounts(profile);
     const name = getByPath(profile, 'basic.name_cn') || '未命名档案';
-    importSummary.innerHTML = `<strong>${name}</strong><br>已导入 ${counts.education} 条教育经历、${counts.internships} 条实习、${counts.campus} 条校园经历、${counts.awards} 条荣誉。`;
+    importSummary.innerHTML = `<strong>${name}</strong><br>已导入 ${counts.education} 条教育经历、${counts.internships} 条实习、${counts.projects} 条项目/科研经历、${counts.campus} 条校园经历、${counts.awards} 条荣誉。`;
     hiddenProfileSummary.textContent = `另有 ${counts.activities} 条社团经历、${counts.awards} 条个人荣誉、${counts.family} 位家庭成员，以及文档中的两张照片路径，均已保存在本地档案。`;
   } catch (e) {
     importSummary.textContent = `读取档案失败：${e.message}`;
@@ -197,6 +200,8 @@ scanBtn.addEventListener('click', async () => {
     };
     const internshipLine = repeatLine('实习经历', rep.internships);
     if (internshipLine) repLines.push(internshipLine);
+    const projectLine = repeatLine('项目/科研经历', rep.projects);
+    if (projectLine) repLines.push(projectLine);
     const awardLine = repeatLine('获奖经历', rep.awards);
     if (awardLine) repLines.push(awardLine);
     const familyLine = repeatLine('家庭关系', rep.family);

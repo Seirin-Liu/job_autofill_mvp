@@ -107,9 +107,12 @@ DEFAULT_PROFILE: Dict[str, Any] = {
             "study_length_years": "",
             "overseas_study_experience": "",
             "graduation_project": "",
+            "school_country": "",
+            "is_main_study_experience": "",
         }
     ],
     "internships": [],
+    "projects": [],
     "campus_experience": {
         "is_student_cadre": "",
         "start_date": "",
@@ -143,6 +146,7 @@ DEFAULT_PROFILE: Dict[str, Any] = {
     "summaries": {
         "education_text": "",
         "internships_text": "",
+        "projects_text": "",
         "student_activities_text": "",
         "awards_text": "",
         "skills_text": "",
@@ -217,12 +221,44 @@ FIELD_DEFS: Dict[str, List[str]] = {
     "education[1].overseas_study_experience": ["本科是否有海外学习经历", "本科海外学习经历"],
     "education[1].graduation_project": ["本科毕业设计", "本科毕业论文", "本科毕业课题"],
 
+    # 高中教育经历。通用标签（如“学校名称”“入学时间”）只在页面上下文明示“高中/中学”时参与匹配，
+    # 防止与硕士、本科教育经历发生冲突。
+    "education[2].school": ["高中学校", "高中学校名称", "高中院校", "中学名称", "学校名称", "学校"],
+    "education[2].degree": ["高中学历", "高中教育学历", "学历"],
+    "education[2].academic_degree": ["高中学位", "高中教育学位", "学位"],
+    "education[2].start_date": ["高中入学时间", "高中开始时间", "入学时间"],
+    "education[2].end_date": ["高中毕业时间", "高中结束时间", "毕业时间"],
+    "education[2].ranking": ["高中年级排名", "高中成绩排名", "年级排名"],
+    "education[2].education_type": ["高中受教育类型", "高中教育类型", "受教育类型"],
+    "education[2].study_length_years": ["高中学制", "高中学制年限", "学制"],
+    "education[2].full_time": ["高中是否全日制", "是否全日制"],
+    "education[2].is_main_study_experience": ["高中是否主要学习经历", "是否主要学习经历", "主要学习经历"],
+    "education[2].school_country": ["高中学校所属国家", "学校所属国家", "学校国家", "就读国家"],
+
     "internships[0].company": ["最近实习单位", "最近一段实习单位", "第一段实习单位", "实习单位1", "最近实践单位"],
     "internships[0].city": ["最近实习城市", "第一段实习城市", "实习城市1"],
     "internships[0].role": ["最近实习岗位", "最近实习职位", "第一段实习岗位", "实习岗位1"],
     "internships[0].start_date": ["最近实习开始时间", "第一段实习开始时间", "实习开始时间1"],
     "internships[0].end_date": ["最近实习结束时间", "第一段实习结束时间", "实习结束时间1"],
     "internships[0].description": ["最近实习内容", "最近实践内容", "第一段实习内容", "实习内容1"],
+
+    # 项目/科研经历：仅对明确指向“第一/最近项目”或“科研项目”的字段做数组项映射；
+    # 泛化的“项目经历/科研经历”优先使用 summaries.projects_text，避免重复表单误填。
+    "projects[0].name": ["最近项目名称", "第一项目名称", "项目1名称", "项目名称1", "物流管理系统项目名称"],
+    "projects[0].type": ["第一项目类型", "项目1类型", "项目类型1"],
+    "projects[0].start_date": ["最近项目开始时间", "第一项目开始时间", "项目1开始时间"],
+    "projects[0].end_date": ["最近项目结束时间", "第一项目结束时间", "项目1结束时间"],
+    "projects[0].tech_stack": ["最近项目技术栈", "第一项目技术栈", "项目1技术栈", "项目技术栈1"],
+    "projects[0].description": ["最近项目描述", "第一项目描述", "项目1描述", "项目内容1"],
+    "projects[0].result": ["第一项目成果", "项目1成果"],
+
+    "projects[1].name": ["科研项目名称", "科研经历项目名称", "第二项目名称", "项目2名称", "项目名称2"],
+    "projects[1].type": ["科研项目类型", "第二项目类型", "项目2类型"],
+    "projects[1].start_date": ["科研项目开始时间", "第二项目开始时间", "项目2开始时间"],
+    "projects[1].end_date": ["科研项目结束时间", "第二项目结束时间", "项目2结束时间"],
+    "projects[1].tech_stack": ["科研项目技术栈", "第二项目技术栈", "项目2技术栈"],
+    "projects[1].description": ["科研项目描述", "科研项目内容", "第二项目描述", "项目2描述"],
+    "projects[1].result": ["科研成果", "论文成果", "项目成果", "录用情况", "科研项目成果"],
 
     "skills.cet4": ["cet4", "cet-4", "英语四级", "大学英语四级", "四级成绩", "cet4成绩"],
     "skills.cet6": ["cet6", "cet-6", "英语六级", "大学英语六级", "六级成绩", "cet6成绩"],
@@ -264,6 +300,7 @@ FIELD_DEFS: Dict[str, List[str]] = {
 
     "summaries.education_text": ["教育经历", "教育背景", "学习经历"],
     "summaries.internships_text": ["实习经历", "实习经验", "社会实践", "实践经历", "工作实践经历"],
+    "summaries.projects_text": ["项目经历", "项目经验", "科研经历", "项目与科研经历", "科研项目", "主要项目", "project experience", "research experience"],
     "summaries.student_activities_text": ["社团经历", "学生工作", "学生社团活动", "校园活动"],
     "summaries.awards_text": ["个人荣誉", "获奖情况", "奖项", "荣誉奖励", "荣誉奖项"],
     "summaries.skills_text": ["技能水平", "技能情况", "语言水平", "外语水平"],
@@ -290,6 +327,16 @@ REPEATABLE_FIELD_DEFS: Dict[str, Dict[str, List[str]]] = {
         "contact_name": ["单位联系人", "联系人", "单位联系人员"],
         "contact_phone": ["单位联系电话", "联系人电话", "联系电话"],
     },
+    "projects": {
+        "name": ["项目名称", "课题名称", "科研项目名称", "名称"],
+        "type": ["项目类型", "经历类型", "项目类别", "类型"],
+        "role": ["项目角色", "担任角色", "职责", "角色"],
+        "start_date": ["项目开始时间", "开始时间", "起始时间", "开始日期"],
+        "end_date": ["项目结束时间", "结束时间", "终止时间", "结束日期"],
+        "tech_stack": ["技术栈", "项目技术栈", "使用技术", "技术框架", "开发技术"],
+        "description": ["项目内容", "项目描述", "项目简介", "主要内容", "项目职责"],
+        "result": ["项目成果", "科研成果", "论文成果", "项目业绩", "成果"],
+    },
     "awards": {
         "date": ["获奖时间", "奖项时间", "时间", "日期"],
         "name": ["奖项名称", "获奖名称", "荣誉名称", "奖励名称"],
@@ -315,6 +362,7 @@ REPEATABLE_DEFAULTS: Dict[str, Dict[str, Any]] = {
     # Do not force a site-specific work-type value. Some ATSes use this field for
     # the functional category (for example "软件开发") rather than "实习".
     "internships": {},
+    "projects": {},
     "awards": {},
     "family": {},
 }
@@ -325,6 +373,8 @@ OPTION_ALIASES = {
     "全日制教育": ["全日制教育", "全日制", "普通全日制"],
     "无": ["无", "没有", "否", "none", "no"],
     "其他": ["其他", "其它", "other"],
+    "高中": ["高中", "普通高中", "高级中学", "senior high school", "high school"],
+    "全日制统招": ["全日制统招", "统招", "普通全日制", "全日制"],
     "男": ["男", "男性", "male", "m"],
     "女": ["女", "女性", "female", "f"],
     "本科": ["本科", "大学本科", "学士", "bachelor", "undergraduate"],
@@ -448,7 +498,7 @@ def init_db() -> None:
 
 init_db()
 
-app = FastAPI(title="Job Autofill Local Service", version="0.8.0")
+app = FastAPI(title="Job Autofill Local Service", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -586,6 +636,15 @@ def local_match(field: FieldInfo, profile: Dict[str, Any]) -> Optional[MatchResu
         marker in normalized_context
         for marker in ("校园经历", "校园活动", "学生干部", "学生工作", "社团经历")
     )
+    high_school_context = any(
+        marker in normalized_context
+        for marker in ("高中", "中学", "高中教育", "高中经历")
+    )
+    high_school_generic_aliases = {
+        "学校名称", "学校", "学历", "学位", "入学时间", "毕业时间",
+        "年级排名", "受教育类型", "学制", "是否全日制",
+        "是否主要学习经历", "主要学习经历", "学校所属国家", "学校国家", "就读国家",
+    }
     best_key = None
     best_score = 0.0
     best_alias = ""
@@ -596,7 +655,15 @@ def local_match(field: FieldInfo, profile: Dict[str, Any]) -> Optional[MatchResu
         for alias in aliases:
             if key in {"campus_experience.start_date", "campus_experience.end_date"} and alias in {"开始时间", "结束时间"} and not campus_context:
                 continue
+            if key.startswith("education[2].") and alias in high_school_generic_aliases and not high_school_context:
+                continue
             score = alias_score(text, alias)
+            # When the DOM context says this block is high-school education, prefer education[2]
+            # over otherwise-identical generic labels from postgraduate/undergraduate records.
+            if high_school_context and key.startswith("education[2]."):
+                score = min(1.0, score + 0.08)
+            elif high_school_context and key.startswith(("education[0].", "education[1].")):
+                score *= 0.78
             if score > best_score:
                 best_key, best_score, best_alias = key, score, alias
     if best_key and best_score >= 0.74:
@@ -908,6 +975,7 @@ def status() -> Dict[str, Any]:
         "profile_name": get_by_path(profile, "basic.name_cn") or "",
         "education_count": len(profile.get("education", [])),
         "internship_count": len(profile.get("internships", [])),
+        "project_count": len(profile.get("projects", [])),
         "award_count": len(profile.get("awards", [])),
     }
 
