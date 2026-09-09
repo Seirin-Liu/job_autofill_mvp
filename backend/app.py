@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import os
 import re
@@ -24,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "data"
 DB_PATH = DATA_DIR / "autofill.db"
 SEED_PATH = DATA_DIR / "profile_seed.json"
-SEED_VERSION = "family-profile-20260908-v5"
+SEED_HASH_KEY = "profile_seed_hash"
 ENV_PATH = ROOT / ".env"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -66,11 +67,16 @@ DEFAULT_PROFILE: Dict[str, Any] = {
         "email": "",
         "gender": "",
         "birthday": "",
+        "age": "",
+        "birth_place": "",
         "political_status": "",
+        "party_join_date": "",
         "ethnicity": "",
         "height_cm": "",
         "weight_kg": "",
         "hometown": "",
+        "is_beijing_household": "",
+        "household_location": "",
         "student_origin": "",
         "current_city": "",
         "current_address": "",
@@ -91,6 +97,7 @@ DEFAULT_PROFILE: Dict[str, Any] = {
             "courses": "",
             "start_date": "",
             "end_date": "",
+            "expected_degree_date": "",
             "first_degree": "",
             "full_time": "",
             "exchange_program": "",
@@ -158,13 +165,18 @@ FIELD_DEFS: Dict[str, List[str]] = {
     "basic.email": ["邮箱", "电子邮箱", "电子邮件", "email", "e-mail"],
     "basic.gender": ["性别", "gender", "sex"],
     "basic.birthday": ["出生日期", "生日", "出生年月", "date of birth", "birthday", "dob"],
+    "basic.age": ["年龄", "周岁", "age"],
+    "basic.birth_place": ["出生地", "出生地点", "出生所在地", "place of birth", "birth place"],
     "basic.political_status": ["政治面貌", "政治身份", "political status"],
+    "basic.party_join_date": ["入党团时间", "入党时间", "入团时间", "加入党团时间", "政治面貌取得时间"],
     "basic.ethnicity": ["民族", "民族信息", "ethnicity"],
     "basic.height_cm": ["身高", "身高cm", "height"],
     "basic.weight_kg": ["体重", "体重kg", "weight"],
     "basic.hometown": ["籍贯", "祖籍", "native place", "hometown"],
-    "basic.student_origin": ["生源地", "生源所在地", "生源地区", "student origin"],
-    "basic.current_city": ["现居地", "现居城市", "当前城市", "current city", "city of residence"],
+    "basic.is_beijing_household": ["是否北京户口", "是否为北京户口", "北京户口", "是否北京户籍"],
+    "basic.household_location": ["户口所在地", "户籍所在地", "当前户口所在地", "当前户籍所在地"],
+    "basic.student_origin": ["高考生源地", "生源地", "生源所在地", "生源地区", "student origin"],
+    "basic.current_city": ["现居地", "现居城市", "现居住城市", "当前城市", "current city", "city of residence"],
     "basic.current_address": ["现住址", "现居住址", "现居地址", "当前住址", "current address"],
     "basic.marital_status": ["婚姻情况", "婚姻状况", "marital status"],
     "basic.health_status": ["健康状况", "健康情况", "身体状况", "health status"],
@@ -173,7 +185,7 @@ FIELD_DEFS: Dict[str, List[str]] = {
     "basic.postal_code": ["邮政编码", "邮编", "邮递区号", "postal code", "zip code"],
 
     "education[0].school": ["毕业院校", "最高学历院校", "研究生院校", "硕士院校", "学校", "院校", "university", "school", "college"],
-    "education[0].degree": ["学历", "最高学历", "研究生学历", "硕士学历", "education level"],
+    "education[0].degree": ["学历", "最高学历", "全日制最高学历", "最高全日制学历", "研究生学历", "硕士学历", "education level"],
     "education[0].academic_degree": ["学位", "最高学位", "研究生学位", "硕士学位", "academic degree"],
     "education[0].college": ["研究生院系", "硕士院系", "最高学历院系", "院系", "学院"],
     "education[0].major": ["专业", "所学专业", "最高学历专业", "研究生专业", "硕士专业", "major", "field of study"],
@@ -181,6 +193,7 @@ FIELD_DEFS: Dict[str, List[str]] = {
     "education[0].courses": ["专业课程", "主要课程", "研究生专业课程", "硕士专业课程", "major courses", "core courses"],
     "education[0].start_date": ["研究生入学时间", "硕士入学时间", "最高学历入学时间", "入学时间", "入学日期", "enrollment date"],
     "education[0].end_date": ["毕业时间", "预计毕业时间", "最高学历毕业时间", "研究生毕业时间", "graduation date"],
+    "education[0].expected_degree_date": ["拟取得学位时间", "预计取得学位时间", "学位取得时间", "预计获得学位时间"],
     "education[0].full_time": ["最高学历是否全日制", "研究生是否全日制", "是否全日制"],
     "education[0].exchange_program": ["最高学历合作交流项目", "研究生合作交流项目", "合作交流项目"],
     "education[0].gpa": ["gpa", "绩点", "平均绩点", "grade point average"],
@@ -258,7 +271,7 @@ FIELD_DEFS: Dict[str, List[str]] = {
 
     "job_preferences.cities": ["意向城市", "期望城市", "工作地点", "意向工作地点", "期望工作地点", "preferred city", "work location"],
     "job_preferences.job_types": ["意向岗位", "期望岗位", "职位类别", "求职方向", "desired role", "job type"],
-    "job_preferences.salary": ["期望薪资", "期望年薪", "薪资期望", "expected salary", "salary expectation"],
+    "job_preferences.salary": ["期望薪资", "期望年薪", "期望月薪", "期望薪资范围", "期望薪资范围税前月薪", "税前期望月薪", "薪资期望", "expected salary", "salary expectation"],
     "job_preferences.accept_location_transfer": ["是否服从调剂", "是否接受调剂", "是否接受工作地点调剂", "服从工作地点调剂", "accept transfer"],
 }
 
@@ -405,14 +418,21 @@ def init_db() -> None:
         profile = schema_merge(DEFAULT_PROFILE, profile)
 
         seed = load_seed_profile()
-        seed_marker = conn.execute("SELECT value FROM kv WHERE key='profile_seed_version'").fetchone()
-        if seed and (not seed_marker or seed_marker["value"] != SEED_VERSION):
-            profile = seed_merge(profile, seed)
-            conn.execute(
-                "INSERT INTO kv(key,value) VALUES('profile_seed_version', ?) "
-                "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-                (SEED_VERSION,),
-            )
+        if seed:
+            # Re-import the seed only when profile_seed.json actually changes.
+            # This removes the need to manually bump a hard-coded seed version for every data update.
+            canonical_seed = json.dumps(seed, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+            seed_hash = hashlib.sha256(canonical_seed.encode("utf-8")).hexdigest()
+            seed_marker = conn.execute(
+                "SELECT value FROM kv WHERE key=?", (SEED_HASH_KEY,)
+            ).fetchone()
+            if not seed_marker or seed_marker["value"] != seed_hash:
+                profile = seed_merge(profile, seed)
+                conn.execute(
+                    "INSERT INTO kv(key,value) VALUES(?, ?) "
+                    "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                    (SEED_HASH_KEY, seed_hash),
+                )
 
         conn.execute(
             "INSERT INTO kv(key,value) VALUES('profile', ?) "
@@ -428,7 +448,7 @@ def init_db() -> None:
 
 init_db()
 
-app = FastAPI(title="Job Autofill Local Service", version="0.7.0")
+app = FastAPI(title="Job Autofill Local Service", version="0.8.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
