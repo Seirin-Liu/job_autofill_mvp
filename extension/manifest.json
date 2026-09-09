@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "秋招自动填报助手 MVP",
-  "version": "0.9.4",
+  "version": "0.9.5",
   "description": "本地保存秋招资料，支持本地数据点选直填、规则/DeepSeek 自动识别，以及实习/获奖/家庭关系逐条新增。",
   "permissions": [
     "activeTab",

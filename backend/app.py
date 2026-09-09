@@ -238,29 +238,29 @@ FIELD_DEFS: Dict[str, List[str]] = {
     "education[2].is_main_study_experience": ["高中是否主要学习经历", "是否主要学习经历", "主要学习经历"],
     "education[2].school_country": ["高中学校所属国家", "学校所属国家", "学校国家", "就读国家"],
 
-    "internships[0].company": ["最近实习单位", "最近一段实习单位", "第一段实习单位", "实习单位1", "最近实践单位"],
-    "internships[0].city": ["最近实习城市", "第一段实习城市", "实习城市1"],
-    "internships[0].role": ["最近实习岗位", "最近实习职位", "第一段实习岗位", "实习岗位1"],
-    "internships[0].start_date": ["最近实习开始时间", "第一段实习开始时间", "实习开始时间1"],
-    "internships[0].end_date": ["最近实习结束时间", "第一段实习结束时间", "实习结束时间1"],
-    "internships[0].description": ["最近实习内容", "最近实践内容", "第一段实习内容", "实习内容1"],
+    "internships[0].company": ["最近实习单位", "最近一段实习单位", "第一段实习单位", "实习单位1", "最近实践单位", "工作单位", "单位名称", "公司名称", "实习单位", "实践单位"],
+    "internships[0].city": ["最近实习城市", "第一段实习城市", "实习城市1", "所在城市", "工作城市"],
+    "internships[0].role": ["最近实习岗位", "最近实习职位", "第一段实习岗位", "实习岗位1", "岗位", "职位", "职务", "工作岗位", "实习岗位"],
+    "internships[0].start_date": ["最近实习开始时间", "第一段实习开始时间", "实习开始时间1", "入职时间", "开始时间", "起始时间", "开始日期"],
+    "internships[0].end_date": ["最近实习结束时间", "第一段实习结束时间", "实习结束时间1", "离职时间", "结束时间", "终止时间", "结束日期"],
+    "internships[0].description": ["最近实习内容", "最近实践内容", "第一段实习内容", "实习内容1", "工作描述", "工作内容", "主要工作职责和业绩", "工作职责", "实践内容"],
 
     # 项目/科研经历：仅对明确指向“第一/最近项目”或“科研项目”的字段做数组项映射；
     # 泛化的“项目经历/科研经历”优先使用 summaries.projects_text，避免重复表单误填。
-    "projects[0].name": ["最近项目名称", "第一项目名称", "项目1名称", "项目名称1", "物流管理系统项目名称"],
+    "projects[0].name": ["最近项目名称", "第一项目名称", "项目1名称", "项目名称1", "物流管理系统项目名称", "项目名称", "课题名称"],
     "projects[0].type": ["第一项目类型", "项目1类型", "项目类型1"],
-    "projects[0].start_date": ["最近项目开始时间", "第一项目开始时间", "项目1开始时间"],
-    "projects[0].end_date": ["最近项目结束时间", "第一项目结束时间", "项目1结束时间"],
-    "projects[0].tech_stack": ["最近项目技术栈", "第一项目技术栈", "项目1技术栈", "项目技术栈1"],
-    "projects[0].description": ["最近项目描述", "第一项目描述", "项目1描述", "项目内容1"],
+    "projects[0].start_date": ["最近项目开始时间", "第一项目开始时间", "项目1开始时间", "开始时间", "起始时间", "开始日期"],
+    "projects[0].end_date": ["最近项目结束时间", "第一项目结束时间", "项目1结束时间", "结束时间", "终止时间", "结束日期"],
+    "projects[0].tech_stack": ["最近项目技术栈", "第一项目技术栈", "项目1技术栈", "项目技术栈1", "技术栈", "使用技术", "技术框架"],
+    "projects[0].description": ["最近项目描述", "第一项目描述", "项目1描述", "项目内容1", "项目描述", "项目内容", "项目简介", "主要内容"],
     "projects[0].result": ["第一项目成果", "项目1成果"],
 
-    "projects[1].name": ["科研项目名称", "科研经历项目名称", "第二项目名称", "项目2名称", "项目名称2"],
+    "projects[1].name": ["科研项目名称", "科研经历项目名称", "第二项目名称", "项目2名称", "项目名称2", "项目名称", "课题名称"],
     "projects[1].type": ["科研项目类型", "第二项目类型", "项目2类型"],
-    "projects[1].start_date": ["科研项目开始时间", "第二项目开始时间", "项目2开始时间"],
-    "projects[1].end_date": ["科研项目结束时间", "第二项目结束时间", "项目2结束时间"],
-    "projects[1].tech_stack": ["科研项目技术栈", "第二项目技术栈", "项目2技术栈"],
-    "projects[1].description": ["科研项目描述", "科研项目内容", "第二项目描述", "项目2描述"],
+    "projects[1].start_date": ["科研项目开始时间", "第二项目开始时间", "项目2开始时间", "开始时间", "起始时间", "开始日期"],
+    "projects[1].end_date": ["科研项目结束时间", "第二项目结束时间", "项目2结束时间", "结束时间", "终止时间", "结束日期"],
+    "projects[1].tech_stack": ["科研项目技术栈", "第二项目技术栈", "项目2技术栈", "技术栈", "使用技术", "技术框架"],
+    "projects[1].description": ["科研项目描述", "科研项目内容", "第二项目描述", "项目2描述", "项目描述", "项目内容", "项目简介", "主要内容"],
     "projects[1].result": ["科研成果", "论文成果", "项目成果", "录用情况", "科研项目成果"],
 
     "skills.cet4": ["cet4", "cet-4", "英语四级", "大学英语四级", "四级成绩", "cet4成绩"],
@@ -593,7 +593,7 @@ def init_db() -> None:
 
 init_db()
 
-app = FastAPI(title="Job Autofill Local Service", version="1.3.0")
+app = FastAPI(title="Job Autofill Local Service", version="1.4.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -610,6 +610,7 @@ class FieldInfo(BaseModel):
     name: str = ""
     type: str = "text"
     options: List[str] = Field(default_factory=list)
+    section: str = ""
     context: str = ""
     fingerprint: str = ""
 
@@ -707,7 +708,7 @@ def value_present(value: Any) -> bool:
 
 
 def field_text(field: FieldInfo) -> str:
-    return " ".join(filter(None, [field.label, field.placeholder, field.name, field.context]))[:600]
+    return " ".join(filter(None, [field.section, field.label, field.placeholder, field.name, field.context]))[:700]
 
 
 def alias_score(text: str, alias: str) -> float:
@@ -724,45 +725,111 @@ def alias_score(text: str, alias: str) -> float:
     return SequenceMatcher(None, nt, na).ratio() * 0.75
 
 
+def field_section_kind(field: FieldInfo) -> str:
+    text = normalize_text(" ".join([field.section, field.context]))
+    if any(x in text for x in ("实习经历", "实习工作", "实习及社会经历", "工作及社会经历", "工作经历", "社会实践经历")):
+        return "internships"
+    if any(x in text for x in ("科研经历", "科研项目")):
+        return "research_project"
+    if any(x in text for x in ("项目经历", "项目经验", "主要项目")):
+        return "projects"
+    if any(x in text for x in ("校园经历", "校园活动", "学生干部", "学生工作", "社团经历")):
+        return "campus"
+    if any(x in text for x in ("获奖经历", "获奖情况", "荣誉奖励", "奖项经历", "个人荣誉")):
+        return "awards"
+    if any(x in text for x in ("家庭关系", "家庭成员", "亲属信息", "家庭信息")):
+        return "family"
+    if any(x in text for x in ("高中", "中学", "高中教育", "高中经历")):
+        return "education2"
+    if any(x in text for x in ("本科", "大学本科", "本科教育")):
+        return "education1"
+    if any(x in text for x in ("硕士", "研究生", "最高学历")):
+        return "education0"
+    return ""
+
+
+def key_section_kind(key: str) -> str:
+    if key.startswith("internships["):
+        return "internships"
+    if key.startswith("projects[1]."):
+        return "research_project"
+    if key.startswith("projects["):
+        return "projects"
+    if key.startswith("campus_experience."):
+        return "campus"
+    if key.startswith("education[0]."):
+        return "education0"
+    if key.startswith("education[1]."):
+        return "education1"
+    if key.startswith("education[2]."):
+        return "education2"
+    if key.startswith("family."):
+        return "family"
+    return ""
+
+
+GENERIC_CONTEXT_ALIASES = {
+    "开始时间", "结束时间", "起始时间", "终止时间", "开始日期", "结束日期",
+    "入职时间", "离职时间", "时间", "日期", "名称", "单位名称", "工作单位",
+    "公司名称", "岗位", "职位", "职务", "工作内容", "工作描述", "项目内容",
+    "项目描述", "项目名称", "课题名称", "技术栈", "使用技术", "主要内容",
+}
+
+
 def local_match(field: FieldInfo, profile: Dict[str, Any]) -> Optional[MatchResult]:
     text = field_text(field)
-    normalized_context = normalize_text(" ".join([field.label, field.context]))
-    campus_context = any(
-        marker in normalized_context
-        for marker in ("校园经历", "校园活动", "学生干部", "学生工作", "社团经历")
-    )
-    high_school_context = any(
-        marker in normalized_context
-        for marker in ("高中", "中学", "高中教育", "高中经历")
-    )
+    section_kind = field_section_kind(field)
+    campus_context = section_kind == "campus"
+    high_school_context = section_kind == "education2"
     high_school_generic_aliases = {
         "学校名称", "学校", "学历", "学位", "入学时间", "毕业时间",
         "年级排名", "受教育类型", "学制", "是否全日制",
         "是否主要学习经历", "主要学习经历", "学校所属国家", "学校国家", "就读国家",
     }
+
     best_key = None
     best_score = 0.0
     best_alias = ""
+
     for key, aliases in FIELD_DEFS.items():
         value = get_by_path(profile, key)
         if not value_present(value):
             continue
+        candidate_kind = key_section_kind(key)
+
         for alias in aliases:
+            if alias in GENERIC_CONTEXT_ALIASES and candidate_kind:
+                if not section_kind:
+                    continue
+                if candidate_kind != section_kind:
+                    continue
+
             if key in {"campus_experience.start_date", "campus_experience.end_date"} and alias in {"开始时间", "结束时间"} and not campus_context:
                 continue
             if key.startswith("education[2].") and alias in high_school_generic_aliases and not high_school_context:
                 continue
+
             score = alias_score(text, alias)
-            # When the DOM context says this block is high-school education, prefer education[2]
-            # over otherwise-identical generic labels from postgraduate/undergraduate records.
+
+            if section_kind and candidate_kind:
+                if candidate_kind == section_kind:
+                    score = min(1.0, score + 0.12)
+                else:
+                    score *= 0.45
+
             if high_school_context and key.startswith("education[2]."):
                 score = min(1.0, score + 0.08)
             elif high_school_context and key.startswith(("education[0].", "education[1].")):
-                score *= 0.78
+                score *= 0.55
+
             if score > best_score:
                 best_key, best_score, best_alias = key, score, alias
+
     if best_key and best_score >= 0.74:
         value = get_by_path(profile, best_key)
+        reason = f"规则匹配：{best_alias}"
+        if field.section.strip():
+            reason += f"；栏目：{field.section.strip()[:60]}"
         return MatchResult(
             id=field.id,
             profile_key=best_key,
@@ -770,7 +837,7 @@ def local_match(field: FieldInfo, profile: Dict[str, Any]) -> Optional[MatchResu
             fill_value=resolve_option(value, field.options),
             confidence=round(best_score, 3),
             source="rule",
-            reason=f"规则匹配：{best_alias}",
+            reason=reason,
         )
     return None
 
@@ -864,7 +931,8 @@ def llm_repeatable_plan(kind: str, fields: List[FieldInfo]) -> Dict[str, Dict[st
             "name": f.name[:120],
             "type": f.type,
             "options": f.options[:40],
-            "context": f.context[:220],
+            "section": f.section[:100],
+            "context": f.context[:260],
         }
         for f in fields
     ]
@@ -1001,7 +1069,8 @@ def llm_match(fields: List[FieldInfo], profile: Dict[str, Any]) -> Dict[str, Dic
             "name": f.name[:120],
             "type": f.type,
             "options": f.options[:30],
-            "context": f.context[:220],
+            "section": f.section[:100],
+            "context": f.context[:260],
         }
         for f in fields
     ]

@@ -171,17 +171,81 @@
     return clean(parts.filter(Boolean).join(' | '));
   }
 
-  function nearbySectionHeading(el) {
-    const selectors = 'h1, h2, h3, h4, h5, h6, legend, [class*="section-title"], [class*="sectionTitle"], [class*="module-title"], [class*="moduleTitle"]';
+  const SECTION_HEADING_SELECTOR = [
+    'h1','h2','h3','h4','h5','h6','legend',
+    '[class*="section-title"]','[class*="sectionTitle"]',
+    '[class*="module-title"]','[class*="moduleTitle"]',
+    '[class*="card-title"]','[class*="cardTitle"]',
+    '[class*="panel-title"]','[class*="panelTitle"]',
+    '[class*="block-title"]','[class*="blockTitle"]',
+    '[class*="form-title"]','[class*="formTitle"]'
+  ].join(',');
+
+  function headingText(node) {
+    const text = clean(node?.innerText || node?.textContent);
+    if (!text || text.length > 100) return '';
+    if (/^(开始时间|结束时间|入职时间|离职时间|姓名|名称|职位|岗位|学校|专业|电话|邮箱|内容|描述)$/.test(text)) return '';
+    return text;
+  }
+
+  function lastHeadingBefore(root, el) {
+    if (!root?.querySelectorAll) return '';
+    let best = null;
+    for (const node of root.querySelectorAll(SECTION_HEADING_SELECTOR)) {
+      if (node === el || node.contains?.(el) || !isVisible(node)) continue;
+      const text = headingText(node);
+      if (!text) continue;
+      const pos = node.compareDocumentPosition(el);
+      if (!(pos & Node.DOCUMENT_POSITION_FOLLOWING)) continue;
+      best = node;
+    }
+    return best ? headingText(best) : '';
+  }
+
+  function sectionHeadingFor(el) {
+    let ancestor = el?.parentElement || null;
+    for (let depth = 0; ancestor && depth < 8; depth += 1, ancestor = ancestor.parentElement) {
+      const cls = String(ancestor.className || '');
+      const structural =
+        ancestor.matches?.('section, article, fieldset, form, [role="group"], [role="region"]') ||
+        /section|module|card|panel|block|experience|resume|form/i.test(cls);
+      if (!structural && depth < 2) continue;
+      const heading = lastHeadingBefore(ancestor, el);
+      if (heading) return heading;
+    }
+
+    let node = el;
+    for (let depth = 0; node && depth < 8; depth += 1, node = node.parentElement) {
+      let prev = node.previousElementSibling;
+      let checked = 0;
+      while (prev && checked < 6) {
+        if (isVisible(prev)) {
+          if (prev.matches?.(SECTION_HEADING_SELECTOR)) {
+            const text = headingText(prev);
+            if (text) return text;
+          }
+          const headings = prev.querySelectorAll?.(SECTION_HEADING_SELECTOR);
+          if (headings?.length) {
+            for (let i = headings.length - 1; i >= 0; i -= 1) {
+              const text = headingText(headings[i]);
+              if (text && isVisible(headings[i])) return text;
+            }
+          }
+        }
+        prev = prev.previousElementSibling;
+        checked += 1;
+      }
+    }
+
     const targetTop = el.getBoundingClientRect().top + window.scrollY;
     let best = '';
     let bestTop = -Infinity;
-    for (const node of document.querySelectorAll(selectors)) {
-      if (!isVisible(node)) continue;
-      const text = clean(node.innerText || node.textContent);
-      if (!text || text.length > 80) continue;
-      const top = node.getBoundingClientRect().top + window.scrollY;
-      if (top <= targetTop && top > bestTop && targetTop - top < 1800) {
+    for (const candidate of document.querySelectorAll(SECTION_HEADING_SELECTOR)) {
+      if (!isVisible(candidate)) continue;
+      const text = headingText(candidate);
+      if (!text) continue;
+      const top = candidate.getBoundingClientRect().top + window.scrollY;
+      if (top <= targetTop && top > bestTop && targetTop - top < 1400) {
         best = text;
         bestTop = top;
       }
@@ -194,12 +258,19 @@
       'fieldset, .form-item, .ant-form-item, .el-form-item, .arco-form-item, [class*="form-item"], [class*="formItem"], [class*="field-item"], [class*="fieldItem"], div'
     );
     const local = container ? clean(container.innerText || container.textContent) : '';
-    const heading = nearbySectionHeading(el);
-    return clean([heading, local].filter(Boolean).join(' | ')).slice(0, 220);
+    const section = sectionHeadingFor(el);
+    return clean([section ? `栏目：${section}` : '', local].filter(Boolean).join(' | ')).slice(0, 320);
   }
 
   function fingerprint(meta) {
-    return [meta.type, norm(meta.label), norm(meta.placeholder), norm(meta.name), meta.options.map(norm).join('|')].join('::').slice(0, 1000);
+    return [
+      meta.type,
+      norm(meta.section),
+      norm(meta.label),
+      norm(meta.placeholder),
+      norm(meta.name),
+      meta.options.map(norm).join('|')
+    ].join('::').slice(0, 1200);
   }
 
   function optionText(el) {
@@ -235,6 +306,7 @@
           name: el.name || '',
           type: inputType,
           options,
+          section: sectionHeadingFor(el),
           context: contextFor(el),
         };
         meta.fingerprint = fingerprint(meta);
@@ -254,6 +326,7 @@
         name: el.name || '',
         type: el.tagName === 'SELECT' ? 'select' : inputType,
         options,
+        section: sectionHeadingFor(el),
         context: contextFor(el),
       };
       meta.fingerprint = fingerprint(meta);
@@ -539,6 +612,7 @@
       name: el.getAttribute?.('name') || '',
       type: el.tagName === 'SELECT' ? 'select' : ((el.getAttribute?.('type') || el.getAttribute?.('role') || el.tagName).toLowerCase()),
       options,
+      section: sectionHeadingFor(el),
       context: contextFor(el),
       fingerprint: '',
     };
@@ -1039,7 +1113,9 @@
     const raw = clean(labelFor(el));
     const parts = raw.split('|').map(clean).filter(Boolean).filter(x => x.length <= 80);
     const preferred = parts.find(x => !/^(请输入|请选择|please\s*(input|select))/i.test(x));
-    return preferred || parts[0] || clean(el.getAttribute?.('placeholder')) || clean(el.getAttribute?.('name')) || el.tagName.toLowerCase();
+    const field = preferred || parts[0] || clean(el.getAttribute?.('placeholder')) || clean(el.getAttribute?.('name')) || el.tagName.toLowerCase();
+    const section = sectionHeadingFor(el);
+    return section ? `${section} → ${field}` : field;
   }
 
   function focusableManualControls() {
