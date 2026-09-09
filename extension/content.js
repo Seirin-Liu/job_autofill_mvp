@@ -1281,6 +1281,7 @@
 
     pushPickerItem(items, '个人描述', '自我评价', 'self_evaluation.content', profile.self_evaluation?.content);
     pushPickerItem(items, '个人描述', '性格词', 'personality.words', profile.personality?.words);
+    pushPickerItem(items, '求职偏好', '职业规划', 'career_planning.content', profile.career_planning?.content);
     pushPickerItem(items, '求职偏好', '意向城市', 'job_preferences.cities', profile.job_preferences?.cities);
     pushPickerItem(items, '求职偏好', '意向岗位', 'job_preferences.job_types', profile.job_preferences?.job_types);
     pushPickerItem(items, '求职偏好', '期望薪资', 'job_preferences.salary', profile.job_preferences?.salary);
