@@ -122,6 +122,24 @@
     if (blur) { try { el.blur(); } catch (_) {} }
   }
 
+  function appendNativeValue(el, value, options = {}) {
+    const {blur = true} = options;
+    const proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    const descriptor = Object.getOwnPropertyDescriptor(proto, 'value');
+    const current = String(el.value ?? '');
+    const addition = String(value ?? '');
+    const combined = current + addition;
+    try { el.focus(); } catch (_) {}
+    if (descriptor?.set) descriptor.set.call(el, combined);
+    else el.value = combined;
+    try {
+      const end = combined.length;
+      el.setSelectionRange?.(end, end);
+    } catch (_) {}
+    dispatch(el);
+    if (blur) { try { el.blur(); } catch (_) {} }
+  }
+
   function labelFor(el) {
     const parts = [];
     if (el.labels?.length) parts.push(...[...el.labels].map(l => l.innerText));
@@ -1024,6 +1042,79 @@
     return preferred || parts[0] || clean(el.getAttribute?.('placeholder')) || clean(el.getAttribute?.('name')) || el.tagName.toLowerCase();
   }
 
+  function focusableManualControls() {
+    const selector = 'input, textarea, select, [role="combobox"], [contenteditable="true"]';
+    const seen = new Set();
+    const controls = [];
+    for (const node of document.querySelectorAll(selector)) {
+      if (!(node instanceof Element)) continue;
+      if (pickerHost && (node === pickerHost || pickerHost.contains(node))) continue;
+      if (!node.isConnected || !isVisible(node)) continue;
+      if (node.matches?.(':disabled') || node.getAttribute?.('aria-disabled') === 'true') continue;
+
+      const type = (node.getAttribute?.('type') || '').toLowerCase();
+      if (['hidden', 'button', 'submit', 'reset', 'file', 'password'].includes(type)) continue;
+      if ((node.tagName === 'INPUT' || node.tagName === 'TEXTAREA') && node.readOnly) continue;
+
+      // Custom selects often expose both a wrapper/combobox and an inner input.
+      // Keep only one usable focus target for the same visual control.
+      const root = customSelectRoot(node);
+      const key = root || node;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      let target = node;
+      if (root && root !== node) {
+        target = root.querySelector?.('input:not([type="hidden"]), [role="combobox"], select') || node;
+      }
+      controls.push({node: target, root: key});
+    }
+    return controls;
+  }
+
+  function sameManualControl(a, entry) {
+    if (!a || !entry) return false;
+    if (a === entry.node || a === entry.root) return true;
+    try {
+      if (entry.root?.contains?.(a) || a.contains?.(entry.node)) return true;
+    } catch (_) {}
+    return false;
+  }
+
+  function focusNextManualTarget(current) {
+    const controls = focusableManualControls();
+    if (!controls.length) return null;
+
+    let index = controls.findIndex(entry => sameManualControl(current, entry));
+
+    // For radio/checkbox groups, move past the whole group instead of focusing
+    // another option in the same group.
+    const currentType = (current?.getAttribute?.('type') || '').toLowerCase();
+    const currentName = current?.getAttribute?.('name') || '';
+    if (index >= 0 && currentName && ['radio', 'checkbox'].includes(currentType)) {
+      while (
+        index + 1 < controls.length &&
+        controls[index + 1].node?.getAttribute?.('name') === currentName &&
+        (controls[index + 1].node?.getAttribute?.('type') || '').toLowerCase() === currentType
+      ) {
+        index += 1;
+      }
+    }
+
+    const nextEntry = index >= 0 ? controls[index + 1] : null;
+    if (!nextEntry?.node) return null;
+
+    const next = nextEntry.node;
+    try { next.scrollIntoView({block: 'center', inline: 'nearest', behavior: 'smooth'}); } catch (_) {
+      try { next.scrollIntoView({block: 'center', inline: 'nearest'}); } catch (_) {}
+    }
+    try { next.focus({preventScroll: true}); } catch (_) {
+      try { next.focus(); } catch (_) {}
+    }
+    setManualTarget(next);
+    return next;
+  }
+
   async function chooseCustomSelectDirect(el, value) {
     const values = candidateValues(value).map(norm).filter(Boolean);
     const root = customSelectRoot(el) || el;
@@ -1090,19 +1181,28 @@
       }
       if (el.getAttribute?.('contenteditable') === 'true') {
         el.focus();
-        el.textContent = raw;
+        const current = String(el.textContent ?? '');
+        el.textContent = current + raw;
+        try {
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          range.collapse(false);
+          const selection = window.getSelection();
+          selection?.removeAllRanges();
+          selection?.addRange(range);
+        } catch (_) {}
         el.dispatchEvent(new InputEvent('input', {bubbles: true, inputType: 'insertText', data: raw}));
         el.dispatchEvent(new Event('change', {bubbles: true}));
         return {ok: true};
       }
       if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
-        setNativeValue(el, raw);
-        return {ok: !!readControlValue(el)};
+        appendNativeValue(el, raw);
+        return {ok: String(el.value ?? '').endsWith(raw)};
       }
       const inner = el.querySelector?.('input, textarea');
       if (inner && isVisible(inner)) {
-        setNativeValue(inner, raw);
-        return {ok: !!readControlValue(inner)};
+        appendNativeValue(inner, raw);
+        return {ok: String(inner.value ?? '').endsWith(raw)};
       }
       return {ok: false, reason: '暂不支持这个网页控件。'};
     } catch (error) {
@@ -1179,6 +1279,7 @@
     const emergencyLabels = {name: '紧急联系人姓名', employer: '紧急联系人单位', position: '紧急联系人职务', phone: '紧急联系人电话'};
     for (const [key, label] of Object.entries(emergencyLabels)) pushPickerItem(items, '紧急联系人', label, `family.emergency_contact.${key}`, profile.family?.emergency_contact?.[key]);
 
+    pushPickerItem(items, '个人描述', '自我评价', 'self_evaluation.content', profile.self_evaluation?.content);
     pushPickerItem(items, '个人描述', '性格词', 'personality.words', profile.personality?.words);
     pushPickerItem(items, '求职偏好', '意向城市', 'job_preferences.cities', profile.job_preferences?.cities);
     pushPickerItem(items, '求职偏好', '意向岗位', 'job_preferences.job_types', profile.job_preferences?.job_types);
@@ -1242,7 +1343,7 @@
     titleBox.appendChild(title);
     const help = document.createElement('div');
     help.className = 'ja-help';
-    help.textContent = '无需扫描。先点击招聘网页中要填写的字段，再点下面一条本地数据，即刻写入。填下一个字段时重复这个动作。';
+    help.textContent = '无需扫描。先点击招聘网页中要填写的字段，再点下面一条本地数据；填写成功后会自动跳到下一个可填写字段。';
     titleBox.appendChild(help);
     const close = document.createElement('button');
     close.type = 'button'; close.className = 'ja-close'; close.textContent = '×'; close.setAttribute('aria-label', '关闭');
@@ -1286,11 +1387,14 @@
       const key = document.createElement('div'); key.className = 'ja-key'; key.textContent = item.key; row.appendChild(key);
       row.addEventListener('click', async () => {
         row.disabled = true; row.classList.remove('ok', 'fail');
-        const targetName = manualTargetLabel(manualTarget);
+        const targetBeforeFill = manualTarget;
+        const targetName = manualTargetLabel(targetBeforeFill);
         const result = await fillManualTarget(item.value);
         if (result.ok) {
           row.classList.add('ok');
-          status.textContent = `已填入“${targetName}”：${item.label} = ${item.text.slice(0, 90)}${item.text.length > 90 ? '…' : ''}`;
+          const next = focusNextManualTarget(targetBeforeFill);
+          const nextText = next ? `；已跳到下一项“${manualTargetLabel(next)}”` : '；已到当前页面最后一个可填写字段';
+          status.textContent = `已填入“${targetName}”：${item.label} = ${item.text.slice(0, 90)}${item.text.length > 90 ? '…' : ''}${nextText}`;
         } else {
           row.classList.add('fail');
           status.textContent = result.reason || '填写失败。';

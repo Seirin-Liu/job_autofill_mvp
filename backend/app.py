@@ -136,6 +136,7 @@ DEFAULT_PROFILE: Dict[str, Any] = {
         "members": [],
         "emergency_contact": {"name": "", "employer": "", "position": "", "phone": ""},
     },
+    "self_evaluation": {"content": ""},
     "personality": {"words": []},
     "photos": {"formal_photo": "", "life_photo": ""},
     "job_preferences": {
@@ -298,6 +299,8 @@ FIELD_DEFS: Dict[str, List[str]] = {
     "campus_experience.start_date": ["校园经历开始时间", "学生干部开始时间", "校园活动开始时间", "开始时间"],
     "campus_experience.end_date": ["校园经历结束时间", "学生干部结束时间", "校园活动结束时间", "结束时间"],
     "campus_experience.description": ["校园经历主要内容", "校园经历内容", "学生干部经历", "校园活动主要内容", "校园经历描述"],
+
+    "self_evaluation.content": ["自我评价", "自我评价内容", "个人评价", "个人总结", "综合评价", "自我介绍", "self evaluation", "self assessment"],
 
     "summaries.education_text": ["教育经历", "教育背景", "学习经历"],
     "summaries.internships_text": ["实习经历", "实习经验", "社会实践", "实践经历", "工作实践经历"],
@@ -518,7 +521,7 @@ def init_db() -> None:
 
 init_db()
 
-app = FastAPI(title="Job Autofill Local Service", version="1.1.0")
+app = FastAPI(title="Job Autofill Local Service", version="1.2.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

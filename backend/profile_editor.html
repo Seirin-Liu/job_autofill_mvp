@@ -132,7 +132,7 @@
   function render(){
     ensure('basic',{}); ensure('education',[]); ensure('internships',[]); ensure('projects',[]); ensure('student_activities',[]); ensure('awards',[]);
     ensure('campus_experience',{}); ensure('skills',{}); ensure('family',{members:[],emergency_contact:{}}); ensure('family.members',[]); ensure('family.emergency_contact',{});
-    ensure('personality',{words:[]}); ensure('photos',{}); ensure('job_preferences',{cities:[],job_types:[]}); ensure('summaries',{});
+    ensure('self_evaluation',{content:''}); ensure('personality',{words:[]}); ensure('photos',{}); ensure('job_preferences',{cities:[],job_types:[]}); ensure('summaries',{});
 
     let html='';
     html += section('基本信息','常用网申个人资料。',fieldsHtml('basic',basicFields));
@@ -152,6 +152,9 @@
       ['has_relative_in_cmb_group','是否有近亲属在招商局/招商银行集团','text','wide']
     ]) + '<div style="height:12px"></div>' + fieldsHtml('family.emergency_contact',[
       ['name','紧急联系人姓名'],['employer','紧急联系人单位'],['position','紧急联系人职务'],['phone','紧急联系人电话']
+    ]));
+    html += section('自我评价','用于招聘系统中的自我评价、个人总结等长文本字段。',fieldsHtml('self_evaluation',[
+      ['content','自我评价','textarea','wide']
     ]));
     html += section('性格、照片和求职偏好','数组字段可用逗号分隔。',
       `<div class="grid">
