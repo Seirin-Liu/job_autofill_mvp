@@ -593,7 +593,7 @@ def init_db() -> None:
 
 init_db()
 
-app = FastAPI(title="Job Autofill Local Service", version="1.4.2")
+app = FastAPI(title="Job Autofill Local Service", version="1.4.3")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

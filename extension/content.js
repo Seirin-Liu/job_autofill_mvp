@@ -140,34 +140,122 @@
     if (blur) { try { el.blur(); } catch (_) {} }
   }
 
+  function isGenericFieldText(text) {
+    const t = clean(text);
+    if (!t) return true;
+    return /^(请输入|请选择|请填写|please\s*(input|select|enter)|select|input|必填)$/i.test(t);
+  }
+
+  function pushLabelPart(parts, text) {
+    let t = clean(text);
+    if (!t) return;
+    t = t.replace(/^[*＊]\s*/, '').replace(/\s*必填\s*$/, '').trim();
+    if (!t || t.length > 80 || isGenericFieldText(t)) return;
+    if (!parts.includes(t)) parts.push(t);
+  }
+
+  function localLabelSibling(el) {
+    const rect = el.getBoundingClientRect?.();
+    let node = el;
+
+    // Walk only a few local DOM levels. This is deliberately NOT section-title
+    // detection; it only looks for a label immediately beside the current field.
+    for (let depth = 0; node && depth < 5; depth += 1, node = node.parentElement) {
+      let prev = node.previousElementSibling;
+      let checked = 0;
+      while (prev && checked < 3) {
+        const text = clean(prev.innerText || prev.textContent);
+        const hasControl = !!prev.querySelector?.('input, textarea, select, [role="combobox"]');
+        if (text && text.length <= 80 && !hasControl && !isGenericFieldText(text)) {
+          if (!rect || !prev.getBoundingClientRect) return text;
+          const pr = prev.getBoundingClientRect();
+          const verticalNear = Math.abs((pr.top + pr.bottom) / 2 - (rect.top + rect.bottom) / 2) < 100;
+          const aboveNear = pr.bottom <= rect.top + 30 && rect.top - pr.bottom < 100;
+          if (verticalNear || aboveNear) return text;
+        }
+        prev = prev.previousElementSibling;
+        checked += 1;
+      }
+
+      const parent = node.parentElement;
+      if (!parent) continue;
+
+      // Common ATS frameworks render the label in a sibling div/span instead
+      // of a real <label for="..."> element.
+      const labelNodes = parent.querySelectorAll?.(
+        ':scope > label, :scope > [class*="label"], :scope > [class*="Label"], :scope > [class*="field-name"], :scope > [class*="fieldName"]'
+      ) || [];
+      for (const labelNode of labelNodes) {
+        if (labelNode === node || labelNode.contains?.(el)) continue;
+        const text = clean(labelNode.innerText || labelNode.textContent);
+        if (text && text.length <= 80 && !isGenericFieldText(text)) return text;
+      }
+    }
+    return '';
+  }
+
   function labelFor(el) {
     const parts = [];
-    if (el.labels?.length) parts.push(...[...el.labels].map(l => l.innerText));
+
+    // Standards-based labels first.
+    if (el.labels?.length) {
+      for (const label of el.labels) pushLabelPart(parts, label.innerText || label.textContent);
+    }
+
     const aria = el.getAttribute?.('aria-label');
-    if (aria) parts.push(aria);
+    if (aria) pushLabelPart(parts, aria);
+
     const labelledBy = el.getAttribute?.('aria-labelledby');
     if (labelledBy) {
       for (const id of labelledBy.split(/\s+/)) {
         const node = document.getElementById(id);
-        if (node) parts.push(node.innerText || node.textContent);
+        if (node) pushLabelPart(parts, node.innerText || node.textContent);
       }
     }
-    if (el.placeholder) parts.push(el.placeholder);
-    if (el.name) parts.push(el.name);
 
+    // Then framework-specific form labels around the current field.
+    const root = customSelectRoot(el) || el;
+    let node = root;
+    for (let depth = 0; node && depth < 5; depth += 1, node = node.parentElement) {
+      const parent = node.parentElement;
+      if (!parent) break;
+
+      const selectors = [
+        'label',
+        '.ant-form-item-label',
+        '.el-form-item__label',
+        '.arco-form-item-label',
+        '[class*="form-label"]',
+        '[class*="formLabel"]',
+        '[class*="field-label"]',
+        '[class*="fieldLabel"]'
+      ];
+      for (const selector of selectors) {
+        for (const candidate of parent.querySelectorAll?.(selector) || []) {
+          if (candidate.contains?.(el)) continue;
+          pushLabelPart(parts, candidate.innerText || candidate.textContent);
+        }
+      }
+
+      const sibling = localLabelSibling(node);
+      if (sibling) pushLabelPart(parts, sibling);
+
+      if (parts.length) break;
+    }
+
+    // Old local form-item fallback.
     const parent = el.closest?.(
       'label, .form-item, .ant-form-item, .el-form-item, .arco-form-item, [class*="form-item"], [class*="formItem"], [class*="field-item"], [class*="fieldItem"]'
     );
     if (parent) {
       const text = clean(parent.innerText || parent.textContent);
-      if (text && text.length <= 240) parts.push(text);
+      if (text && text.length <= 120) pushLabelPart(parts, text);
     }
 
-    const prev = el.previousElementSibling;
-    if (prev) {
-      const text = clean(prev.innerText || prev.textContent);
-      if (text.length <= 120) parts.push(text);
-    }
+    // Placeholder/name are last-resort signals only.
+    if (el.placeholder && !isGenericFieldText(el.placeholder)) pushLabelPart(parts, el.placeholder);
+    if (el.name) pushLabelPart(parts, el.name);
+
     return clean(parts.filter(Boolean).join(' | '));
   }
 
@@ -202,10 +290,21 @@
   function scanFields(root = document) {
     registry = new Map();
     const fields = [];
-    const elements = [...root.querySelectorAll('input, textarea, select')].filter(isVisible);
+    const rawElements = [...root.querySelectorAll('input, textarea, select, [role="combobox"]')].filter(isVisible);
     const processedRadioNames = new Set();
+    const processedRoots = new Set();
 
-    for (const el of elements) {
+    for (const rawEl of rawElements) {
+      let el = rawEl;
+      const selectRoot = customSelectRoot(rawEl);
+      if (selectRoot && /ant-select|el-select|arco-select|select/i.test(String(selectRoot.className || ''))) {
+        if (processedRoots.has(selectRoot)) continue;
+        processedRoots.add(selectRoot);
+        el = selectRoot.querySelector?.('input:not([type="hidden"]), [role="combobox"], select') || rawEl;
+      } else if (rawEl.getAttribute?.('role') === 'combobox') {
+        if (processedRoots.has(rawEl)) continue;
+        processedRoots.add(rawEl);
+      }
       const inputType = (el.getAttribute('type') || el.tagName.toLowerCase()).toLowerCase();
       if (['hidden', 'submit', 'button', 'reset', 'image', 'file', 'password'].includes(inputType)) continue;
 
@@ -241,7 +340,9 @@
         label: labelFor(el),
         placeholder: el.placeholder || '',
         name: el.name || '',
-        type: el.tagName === 'SELECT' ? 'select' : inputType,
+        type: el.tagName === 'SELECT'
+          ? 'select'
+          : ((el.getAttribute?.('role') === 'combobox' || customSelectRoot(el)) ? 'combobox' : inputType),
         options,
         context: contextFor(el),
       };
@@ -283,13 +384,38 @@
     return true;
   }
 
-  function fillOne(match) {
+  async function fillOne(match) {
     const item = registry.get(match.id);
     if (!item || !match.profile_key || match.fill_value == null || match.fill_value === '') return false;
     try {
-      if (item.kind === 'radio' || item.kind === 'checkbox') return chooseGroup(item.elements, match.fill_value);
-      if (item.kind === 'select') return chooseSelect(item.element, match.fill_value);
-      setNativeValue(item.element, match.fill_value);
+      if (item.kind === 'radio' || item.kind === 'checkbox') {
+        return chooseGroup(item.elements, match.fill_value);
+      }
+
+      const el = item.element;
+      if (!el) return false;
+
+      if (item.kind === 'select') return chooseSelect(el, match.fill_value);
+
+      const role = el.getAttribute?.('role');
+      const selectRoot = customSelectRoot(el);
+      if (
+        item.kind === 'combobox' ||
+        role === 'combobox' ||
+        (selectRoot && /ant-select|el-select|arco-select|select/i.test(String(selectRoot.className || '')))
+      ) {
+        const ok = await chooseCustomSelectDirect(el, match.fill_value);
+        if (ok) return true;
+        // Some "combobox" inputs are actually normal editable inputs.
+        if (!(el.tagName === 'INPUT' && !el.readOnly)) return false;
+      }
+
+      if (dateLike(el, labelFor(el))) {
+        const ok = await setDateControl(el, match.fill_value, labelFor(el));
+        if (ok) return true;
+      }
+
+      setNativeValue(el, match.fill_value);
       return true;
     } catch (_) {
       return false;
@@ -1420,9 +1546,19 @@
     });
     if (!response.ok) throw new Error(`本地服务返回 ${response.status}`);
     const data = await response.json();
+    if ((data.stats?.matched || 0) <= 2 && fields.length >= 10) {
+      console.warn('[秋招助手] 匹配率过低，以下是前 30 个识别到的字段，便于排查网页 DOM：');
+      console.table(fields.slice(0, 30).map(f => ({
+        label: f.label,
+        placeholder: f.placeholder,
+        name: f.name,
+        type: f.type,
+        context: f.context
+      })));
+    }
     let filled = 0;
     for (const match of data.matches || []) {
-      if (fillOne(match)) filled += 1;
+      if (await fillOne(match)) filled += 1;
     }
 
     let profile = {};
