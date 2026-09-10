@@ -181,6 +181,22 @@
     '[class*="form-title"]','[class*="formTitle"]'
   ].join(',');
 
+  function canonicalSectionFromText(text) {
+    const t = clean(text);
+    if (!t) return '';
+    // Order matters: “科研项目” should be classified as research, not generic project.
+    if (/科研|课题研究/.test(t)) return '科研经历';
+    if (/实习|工作经历|社会实践|实践经历/.test(t)) return '实习经历';
+    if (/项目经历|项目经验|主要项目|项目名称|项目内容/.test(t)) return '项目经历';
+    if (/校园经历|校园活动|学生干部|学生工作|社团经历|社团活动/.test(t)) return '校园经历';
+    if (/获奖|荣誉|奖项/.test(t)) return '获奖经历';
+    if (/家庭|亲属|家庭成员/.test(t)) return '家庭关系';
+    if (/高中|中学/.test(t)) return '高中教育';
+    if (/本科/.test(t)) return '本科教育';
+    if (/硕士|研究生|最高学历/.test(t)) return '研究生教育';
+    return '';
+  }
+
   function headingText(node) {
     const text = clean(node?.innerText || node?.textContent);
     if (!text || text.length > 100) return '';
@@ -203,32 +219,60 @@
   }
 
   function sectionHeadingFor(el) {
+    // First inspect nearby structural containers. This works even when the site
+    // does not use h1/h2 or a predictable title class.
     let ancestor = el?.parentElement || null;
-    for (let depth = 0; ancestor && depth < 8; depth += 1, ancestor = ancestor.parentElement) {
+    for (let depth = 0; ancestor && depth < 7; depth += 1, ancestor = ancestor.parentElement) {
       const cls = String(ancestor.className || '');
       const structural =
         ancestor.matches?.('section, article, fieldset, form, [role="group"], [role="region"]') ||
-        /section|module|card|panel|block|experience|resume|form/i.test(cls);
-      if (!structural && depth < 2) continue;
-      const heading = lastHeadingBefore(ancestor, el);
-      if (heading) return heading;
+        /section|module|card|panel|block|experience|resume|form|item/i.test(cls);
+
+      if (structural || depth <= 3) {
+        // Prefer short direct-child texts; section titles are often a plain div/span.
+        for (const child of [...(ancestor.children || [])].slice(0, 12)) {
+          if (child === el || child.contains?.(el)) continue;
+          const text = clean(child.innerText || child.textContent);
+          if (!text || text.length > 120) continue;
+          const canonical = canonicalSectionFromText(text);
+          if (canonical) return canonical;
+        }
+
+        // Some pages put title + form body in the same wrapper.
+        const ownText = clean(ancestor.innerText || ancestor.textContent);
+        if (ownText && ownText.length <= 900) {
+          const canonical = canonicalSectionFromText(ownText.slice(0, 220));
+          if (canonical) return canonical;
+        }
+      }
     }
 
+    // Then walk previous siblings while moving upward.
     let node = el;
     for (let depth = 0; node && depth < 8; depth += 1, node = node.parentElement) {
       let prev = node.previousElementSibling;
       let checked = 0;
-      while (prev && checked < 6) {
+      while (prev && checked < 8) {
         if (isVisible(prev)) {
+          const prevText = clean(prev.innerText || prev.textContent);
+          if (prevText && prevText.length <= 180) {
+            const canonical = canonicalSectionFromText(prevText);
+            if (canonical) return canonical;
+          }
+
           if (prev.matches?.(SECTION_HEADING_SELECTOR)) {
             const text = headingText(prev);
+            const canonical = canonicalSectionFromText(text);
+            if (canonical) return canonical;
             if (text) return text;
           }
+
           const headings = prev.querySelectorAll?.(SECTION_HEADING_SELECTOR);
           if (headings?.length) {
             for (let i = headings.length - 1; i >= 0; i -= 1) {
               const text = headingText(headings[i]);
-              if (text && isVisible(headings[i])) return text;
+              const canonical = canonicalSectionFromText(text);
+              if (canonical) return canonical;
             }
           }
         }
@@ -237,6 +281,7 @@
       }
     }
 
+    // Finally use the nearest heading above the control.
     const targetTop = el.getBoundingClientRect().top + window.scrollY;
     let best = '';
     let bestTop = -Infinity;
@@ -250,7 +295,7 @@
         bestTop = top;
       }
     }
-    return best;
+    return canonicalSectionFromText(best) || best;
   }
 
   function contextFor(el) {

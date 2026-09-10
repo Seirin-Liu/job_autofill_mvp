@@ -593,7 +593,7 @@ def init_db() -> None:
 
 init_db()
 
-app = FastAPI(title="Job Autofill Local Service", version="1.4.0")
+app = FastAPI(title="Job Autofill Local Service", version="1.4.1")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -726,26 +726,39 @@ def alias_score(text: str, alias: str) -> float:
 
 
 def field_section_kind(field: FieldInfo) -> str:
-    text = normalize_text(" ".join([field.section, field.context]))
-    if any(x in text for x in ("实习经历", "实习工作", "实习及社会经历", "工作及社会经历", "工作经历", "社会实践经历")):
-        return "internships"
-    if any(x in text for x in ("科研经历", "科研项目")):
-        return "research_project"
-    if any(x in text for x in ("项目经历", "项目经验", "主要项目")):
-        return "projects"
-    if any(x in text for x in ("校园经历", "校园活动", "学生干部", "学生工作", "社团经历")):
-        return "campus"
-    if any(x in text for x in ("获奖经历", "获奖情况", "荣誉奖励", "奖项经历", "个人荣誉")):
-        return "awards"
-    if any(x in text for x in ("家庭关系", "家庭成员", "亲属信息", "家庭信息")):
-        return "family"
-    if any(x in text for x in ("高中", "中学", "高中教育", "高中经历")):
-        return "education2"
-    if any(x in text for x in ("本科", "大学本科", "本科教育")):
-        return "education1"
-    if any(x in text for x in ("硕士", "研究生", "最高学历")):
-        return "education0"
-    return ""
+    """Classify section context, but never require it for matching.
+
+    `section` is preferred because it is produced by the extension's nearby
+    module detector. `context` is only a fallback. This keeps section context
+    useful without making matching fail on sites with unusual DOM structures.
+    """
+    section = normalize_text(field.section)
+    context = normalize_text(field.context)
+
+    def classify(text: str) -> str:
+        if not text:
+            return ""
+        if any(x in text for x in ("科研", "课题研究")):
+            return "research_project"
+        if any(x in text for x in ("实习", "工作经历", "社会实践", "实践经历")):
+            return "internships"
+        if any(x in text for x in ("项目经历", "项目经验", "主要项目", "项目名称", "项目内容")):
+            return "projects"
+        if any(x in text for x in ("校园经历", "校园活动", "学生干部", "学生工作", "社团经历", "社团活动")):
+            return "campus"
+        if any(x in text for x in ("获奖", "荣誉", "奖项")):
+            return "awards"
+        if any(x in text for x in ("家庭", "亲属", "家庭成员")):
+            return "family"
+        if any(x in text for x in ("高中", "中学")):
+            return "education2"
+        if "本科" in text:
+            return "education1"
+        if any(x in text for x in ("硕士", "研究生", "最高学历")):
+            return "education0"
+        return ""
+
+    return classify(section) or classify(context)
 
 
 def key_section_kind(key: str) -> str:
@@ -779,7 +792,6 @@ GENERIC_CONTEXT_ALIASES = {
 def local_match(field: FieldInfo, profile: Dict[str, Any]) -> Optional[MatchResult]:
     text = field_text(field)
     section_kind = field_section_kind(field)
-    campus_context = section_kind == "campus"
     high_school_context = section_kind == "education2"
     high_school_generic_aliases = {
         "学校名称", "学校", "学历", "学位", "入学时间", "毕业时间",
@@ -795,27 +807,32 @@ def local_match(field: FieldInfo, profile: Dict[str, Any]) -> Optional[MatchResu
         value = get_by_path(profile, key)
         if not value_present(value):
             continue
+
         candidate_kind = key_section_kind(key)
 
         for alias in aliases:
-            if alias in GENERIC_CONTEXT_ALIASES and candidate_kind:
-                if not section_kind:
-                    continue
-                if candidate_kind != section_kind:
-                    continue
-
-            if key in {"campus_experience.start_date", "campus_experience.end_date"} and alias in {"开始时间", "结束时间"} and not campus_context:
-                continue
+            # Keep the old field-name matching as the baseline. Section context
+            # only adjusts confidence; it no longer decides whether a candidate
+            # is allowed to participate.
             if key.startswith("education[2].") and alias in high_school_generic_aliases and not high_school_context:
                 continue
 
             score = alias_score(text, alias)
+            if score <= 0:
+                continue
 
             if section_kind and candidate_kind:
                 if candidate_kind == section_kind:
-                    score = min(1.0, score + 0.12)
+                    # Strong positive signal when section and schema agree.
+                    score = min(1.0, score + 0.14)
+                elif alias in GENERIC_CONTEXT_ALIASES:
+                    # For ambiguous names such as “开始时间”, a known mismatched
+                    # section should almost eliminate the wrong candidate.
+                    score *= 0.28
                 else:
-                    score *= 0.45
+                    # For unique fields, keep a softer penalty in case a site's
+                    # detected title is imperfect.
+                    score *= 0.72
 
             if high_school_context and key.startswith("education[2]."):
                 score = min(1.0, score + 0.08)
@@ -830,6 +847,8 @@ def local_match(field: FieldInfo, profile: Dict[str, Any]) -> Optional[MatchResu
         reason = f"规则匹配：{best_alias}"
         if field.section.strip():
             reason += f"；栏目：{field.section.strip()[:60]}"
+        elif section_kind:
+            reason += f"；上下文栏目：{section_kind}"
         return MatchResult(
             id=field.id,
             profile_key=best_key,
