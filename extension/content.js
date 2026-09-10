@@ -171,151 +171,24 @@
     return clean(parts.filter(Boolean).join(' | '));
   }
 
-  const SECTION_HEADING_SELECTOR = [
-    'h1','h2','h3','h4','h5','h6','legend',
-    '[class*="section-title"]','[class*="sectionTitle"]',
-    '[class*="module-title"]','[class*="moduleTitle"]',
-    '[class*="card-title"]','[class*="cardTitle"]',
-    '[class*="panel-title"]','[class*="panelTitle"]',
-    '[class*="block-title"]','[class*="blockTitle"]',
-    '[class*="form-title"]','[class*="formTitle"]'
-  ].join(',');
-
-  function canonicalSectionFromText(text) {
-    const t = clean(text);
-    if (!t) return '';
-    // Order matters: “科研项目” should be classified as research, not generic project.
-    if (/科研|课题研究/.test(t)) return '科研经历';
-    if (/实习|工作经历|社会实践|实践经历/.test(t)) return '实习经历';
-    if (/项目经历|项目经验|主要项目|项目名称|项目内容/.test(t)) return '项目经历';
-    if (/校园经历|校园活动|学生干部|学生工作|社团经历|社团活动/.test(t)) return '校园经历';
-    if (/获奖|荣誉|奖项/.test(t)) return '获奖经历';
-    if (/家庭|亲属|家庭成员/.test(t)) return '家庭关系';
-    if (/高中|中学/.test(t)) return '高中教育';
-    if (/本科/.test(t)) return '本科教育';
-    if (/硕士|研究生|最高学历/.test(t)) return '研究生教育';
-    return '';
-  }
-
-  function headingText(node) {
-    const text = clean(node?.innerText || node?.textContent);
-    if (!text || text.length > 100) return '';
-    if (/^(开始时间|结束时间|入职时间|离职时间|姓名|名称|职位|岗位|学校|专业|电话|邮箱|内容|描述)$/.test(text)) return '';
-    return text;
-  }
-
-  function lastHeadingBefore(root, el) {
-    if (!root?.querySelectorAll) return '';
-    let best = null;
-    for (const node of root.querySelectorAll(SECTION_HEADING_SELECTOR)) {
-      if (node === el || node.contains?.(el) || !isVisible(node)) continue;
-      const text = headingText(node);
-      if (!text) continue;
-      const pos = node.compareDocumentPosition(el);
-      if (!(pos & Node.DOCUMENT_POSITION_FOLLOWING)) continue;
-      best = node;
-    }
-    return best ? headingText(best) : '';
-  }
-
-  function sectionHeadingFor(el) {
-    // First inspect nearby structural containers. This works even when the site
-    // does not use h1/h2 or a predictable title class.
-    let ancestor = el?.parentElement || null;
-    for (let depth = 0; ancestor && depth < 7; depth += 1, ancestor = ancestor.parentElement) {
-      const cls = String(ancestor.className || '');
-      const structural =
-        ancestor.matches?.('section, article, fieldset, form, [role="group"], [role="region"]') ||
-        /section|module|card|panel|block|experience|resume|form|item/i.test(cls);
-
-      if (structural || depth <= 3) {
-        // Prefer short direct-child texts; section titles are often a plain div/span.
-        for (const child of [...(ancestor.children || [])].slice(0, 12)) {
-          if (child === el || child.contains?.(el)) continue;
-          const text = clean(child.innerText || child.textContent);
-          if (!text || text.length > 120) continue;
-          const canonical = canonicalSectionFromText(text);
-          if (canonical) return canonical;
-        }
-
-        // Some pages put title + form body in the same wrapper.
-        const ownText = clean(ancestor.innerText || ancestor.textContent);
-        if (ownText && ownText.length <= 900) {
-          const canonical = canonicalSectionFromText(ownText.slice(0, 220));
-          if (canonical) return canonical;
-        }
-      }
-    }
-
-    // Then walk previous siblings while moving upward.
-    let node = el;
-    for (let depth = 0; node && depth < 8; depth += 1, node = node.parentElement) {
-      let prev = node.previousElementSibling;
-      let checked = 0;
-      while (prev && checked < 8) {
-        if (isVisible(prev)) {
-          const prevText = clean(prev.innerText || prev.textContent);
-          if (prevText && prevText.length <= 180) {
-            const canonical = canonicalSectionFromText(prevText);
-            if (canonical) return canonical;
-          }
-
-          if (prev.matches?.(SECTION_HEADING_SELECTOR)) {
-            const text = headingText(prev);
-            const canonical = canonicalSectionFromText(text);
-            if (canonical) return canonical;
-            if (text) return text;
-          }
-
-          const headings = prev.querySelectorAll?.(SECTION_HEADING_SELECTOR);
-          if (headings?.length) {
-            for (let i = headings.length - 1; i >= 0; i -= 1) {
-              const text = headingText(headings[i]);
-              const canonical = canonicalSectionFromText(text);
-              if (canonical) return canonical;
-            }
-          }
-        }
-        prev = prev.previousElementSibling;
-        checked += 1;
-      }
-    }
-
-    // Finally use the nearest heading above the control.
-    const targetTop = el.getBoundingClientRect().top + window.scrollY;
-    let best = '';
-    let bestTop = -Infinity;
-    for (const candidate of document.querySelectorAll(SECTION_HEADING_SELECTOR)) {
-      if (!isVisible(candidate)) continue;
-      const text = headingText(candidate);
-      if (!text) continue;
-      const top = candidate.getBoundingClientRect().top + window.scrollY;
-      if (top <= targetTop && top > bestTop && targetTop - top < 1400) {
-        best = text;
-        bestTop = top;
-      }
-    }
-    return canonicalSectionFromText(best) || best;
-  }
-
   function contextFor(el) {
+    // 只读取当前字段自己的局部表单信息，不再读取页面栏目标题。
+    // 这样“个人信息 / 实习经历 / 项目经历”等标题不会参与普通字段匹配。
     const container = el.closest?.(
-      'fieldset, .form-item, .ant-form-item, .el-form-item, .arco-form-item, [class*="form-item"], [class*="formItem"], [class*="field-item"], [class*="fieldItem"], div'
+      'fieldset, .form-item, .ant-form-item, .el-form-item, .arco-form-item, [class*="form-item"], [class*="formItem"], [class*="field-item"], [class*="fieldItem"]'
     );
-    const local = container ? clean(container.innerText || container.textContent) : '';
-    const section = sectionHeadingFor(el);
-    return clean([section ? `栏目：${section}` : '', local].filter(Boolean).join(' | ')).slice(0, 320);
+    return container ? clean(container.innerText || container.textContent).slice(0, 220) : '';
   }
 
   function fingerprint(meta) {
+    // 恢复为字段自身特征，不再把栏目标题加入历史映射 fingerprint。
     return [
       meta.type,
-      norm(meta.section),
       norm(meta.label),
       norm(meta.placeholder),
       norm(meta.name),
       meta.options.map(norm).join('|')
-    ].join('::').slice(0, 1200);
+    ].join('::').slice(0, 1000);
   }
 
   function optionText(el) {
@@ -351,7 +224,6 @@
           name: el.name || '',
           type: inputType,
           options,
-          section: sectionHeadingFor(el),
           context: contextFor(el),
         };
         meta.fingerprint = fingerprint(meta);
@@ -371,7 +243,6 @@
         name: el.name || '',
         type: el.tagName === 'SELECT' ? 'select' : inputType,
         options,
-        section: sectionHeadingFor(el),
         context: contextFor(el),
       };
       meta.fingerprint = fingerprint(meta);
@@ -657,7 +528,6 @@
       name: el.getAttribute?.('name') || '',
       type: el.tagName === 'SELECT' ? 'select' : ((el.getAttribute?.('type') || el.getAttribute?.('role') || el.tagName).toLowerCase()),
       options,
-      section: sectionHeadingFor(el),
       context: contextFor(el),
       fingerprint: '',
     };
@@ -1158,9 +1028,7 @@
     const raw = clean(labelFor(el));
     const parts = raw.split('|').map(clean).filter(Boolean).filter(x => x.length <= 80);
     const preferred = parts.find(x => !/^(请输入|请选择|please\s*(input|select))/i.test(x));
-    const field = preferred || parts[0] || clean(el.getAttribute?.('placeholder')) || clean(el.getAttribute?.('name')) || el.tagName.toLowerCase();
-    const section = sectionHeadingFor(el);
-    return section ? `${section} → ${field}` : field;
+    return preferred || parts[0] || clean(el.getAttribute?.('placeholder')) || clean(el.getAttribute?.('name')) || el.tagName.toLowerCase();
   }
 
   function focusableManualControls() {
