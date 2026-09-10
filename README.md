@@ -1,5 +1,8 @@
 # 秋招自动填报助手
 
+<img width="391.5" height="492" alt="image" src="https://github.com/user-attachments/assets/6a8410f7-fd11-4c2a-9eb1-fc38cce38122" />
+
+
 本项目用于辅助填写秋招/校招网申信息，采用本地化存储，支持浏览器插件快捷填入、自动识别常见表单字段，并可选接入 DeepSeek API。
 
 ## 主要功能
