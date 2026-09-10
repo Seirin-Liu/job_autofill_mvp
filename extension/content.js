@@ -1255,6 +1255,17 @@
     return true;
   }
 
+  function isAppendTextBox(el) {
+    if (!el) return false;
+    if (el.tagName === 'TEXTAREA') return true;
+    if (el.getAttribute?.('contenteditable') === 'true') return true;
+    if (el.tagName !== 'INPUT') return false;
+
+    // These are visually/textually edited like normal text boxes.
+    const type = (el.getAttribute?.('type') || 'text').toLowerCase();
+    return ['text', 'search', 'email', 'tel', 'url'].includes(type);
+  }
+
   async function fillManualTarget(value) {
     const el = manualTarget;
     if (!el || !el.isConnected) return {ok: false, reason: '请先点击招聘网页中要填写的输入框或下拉框。'};
@@ -1293,6 +1304,10 @@
         const ok = await chooseCustomSelectDirect(el, raw);
         if (ok) return {ok: true};
         if (!(el.tagName === 'INPUT' && !el.readOnly)) return {ok: false, reason: '自定义下拉框中没有匹配选项。'};
+        // Combobox is a selection control, not a free-text box:
+        // if we must fall back to its inner input, replace the old value.
+        setNativeValue(el, raw);
+        return {ok: String(el.value ?? '') === raw};
       }
       if (el.getAttribute?.('contenteditable') === 'true') {
         el.focus();
@@ -1311,13 +1326,22 @@
         return {ok: true};
       }
       if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
-        appendNativeValue(el, raw);
-        return {ok: String(el.value ?? '').endsWith(raw)};
+        if (isAppendTextBox(el)) {
+          appendNativeValue(el, raw);
+          return {ok: String(el.value ?? '').endsWith(raw)};
+        }
+        // number/date/month/time/range/color and other non-text inputs replace.
+        setNativeValue(el, raw);
+        return {ok: String(el.value ?? '') === raw};
       }
       const inner = el.querySelector?.('input, textarea');
       if (inner && isVisible(inner)) {
-        appendNativeValue(inner, raw);
-        return {ok: String(inner.value ?? '').endsWith(raw)};
+        if (isAppendTextBox(inner)) {
+          appendNativeValue(inner, raw);
+          return {ok: String(inner.value ?? '').endsWith(raw)};
+        }
+        setNativeValue(inner, raw);
+        return {ok: String(inner.value ?? '') === raw};
       }
       return {ok: false, reason: '暂不支持这个网页控件。'};
     } catch (error) {
