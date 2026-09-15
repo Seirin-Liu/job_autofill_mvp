@@ -1106,6 +1106,7 @@
   }
 
   let pickerHost = null;
+  let pickerPosition = null;
   let manualTarget = null;
   let manualTargetChanged = null;
 
@@ -1441,7 +1442,7 @@
     return `
       :host{all:initial}*{box-sizing:border-box}
       .ja-panel{position:fixed;right:18px;top:18px;width:min(440px,calc(100vw - 36px));max-height:calc(100vh - 36px);z-index:2147483647;background:#fff;color:#111827;border:1px solid #d1d5db;border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.22);font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:13px;display:flex;flex-direction:column;overflow:hidden}
-      .ja-head{padding:14px;border-bottom:1px solid #e5e7eb}.ja-title-row{display:flex;justify-content:space-between;gap:12px}.ja-title{font-size:17px;font-weight:700}.ja-close{border:0;background:transparent;color:#6b7280;font-size:22px;cursor:pointer}.ja-help{font-size:12px;color:#6b7280;line-height:1.5;margin-top:5px}.ja-target{margin-top:9px;padding:8px 10px;border-radius:8px;background:#f3f4f6;color:#374151;font-size:12px;line-height:1.4}.ja-target.ready{background:#ecfdf5;color:#166534}.ja-search{margin-top:9px;width:100%;border:1px solid #d1d5db;border-radius:8px;padding:9px 10px;font:inherit;color:#111827;background:#fff;outline:none}.ja-search:focus{border-color:#111827}.ja-status{font-size:12px;color:#4b5563;margin-top:8px;min-height:17px;line-height:1.4}
+      .ja-head{padding:14px;border-bottom:1px solid #e5e7eb}.ja-title-row{display:flex;justify-content:space-between;gap:12px;cursor:grab;user-select:none;touch-action:none}.ja-panel.dragging .ja-title-row{cursor:grabbing}.ja-title{font-size:17px;font-weight:700}.ja-close{border:0;background:transparent;color:#6b7280;font-size:22px;cursor:pointer;touch-action:auto}.ja-help{font-size:12px;color:#6b7280;line-height:1.5;margin-top:5px}.ja-target{margin-top:9px;padding:8px 10px;border-radius:8px;background:#f3f4f6;color:#374151;font-size:12px;line-height:1.4}.ja-target.ready{background:#ecfdf5;color:#166534}.ja-search{margin-top:9px;width:100%;border:1px solid #d1d5db;border-radius:8px;padding:9px 10px;font:inherit;color:#111827;background:#fff;outline:none}.ja-search:focus{border-color:#111827}.ja-status{font-size:12px;color:#4b5563;margin-top:8px;min-height:17px;line-height:1.4}
       .ja-list{overflow:auto;padding:9px 10px 12px;background:#f9fafb;overscroll-behavior:contain}.ja-row{width:100%;display:block;text-align:left;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:10px;margin-bottom:8px;cursor:pointer;color:#111827}.ja-row:hover,.ja-row:focus{border-color:#111827;outline:none}.ja-row.ok{border-color:#22c55e;background:#f0fdf4}.ja-row.fail{border-color:#ef4444;background:#fef2f2}.ja-group{font-size:10px;color:#9ca3af;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ja-label{font-size:13px;font-weight:650;margin-top:2px}.ja-value{font-size:12px;color:#374151;margin-top:4px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;word-break:break-all}.ja-key{font-size:10px;color:#9ca3af;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ja-empty{padding:22px 12px;text-align:center;color:#6b7280;background:#fff;border:1px dashed #d1d5db;border-radius:10px}
       @media(max-width:520px){.ja-panel{right:8px;top:8px;width:calc(100vw - 16px);max-height:calc(100vh - 16px)}}
     `;
@@ -1469,12 +1470,82 @@
     panel.setAttribute('aria-label', '本地数据快捷填入');
     shadow.appendChild(panel);
 
+    if (pickerPosition) {
+      requestAnimationFrame(() => {
+        const rect = panel.getBoundingClientRect();
+        const maxLeft = Math.max(8, window.innerWidth - rect.width - 8);
+        const maxTop = Math.max(8, window.innerHeight - Math.min(rect.height, window.innerHeight - 16) - 8);
+        panel.style.right = 'auto';
+        panel.style.left = `${Math.min(Math.max(8, pickerPosition.left), maxLeft)}px`;
+        panel.style.top = `${Math.min(Math.max(8, pickerPosition.top), maxTop)}px`;
+      });
+    }
+
     const head = document.createElement('div');
     head.className = 'ja-head';
     panel.appendChild(head);
     const titleRow = document.createElement('div');
     titleRow.className = 'ja-title-row';
     head.appendChild(titleRow);
+
+    let dragging = null;
+
+    function stopPickerDrag() {
+      if (!dragging) return;
+      const rect = panel.getBoundingClientRect();
+      pickerPosition = {left: rect.left, top: rect.top};
+      panel.classList.remove('dragging');
+      dragging = null;
+    }
+
+    titleRow.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0) return;
+      if (event.target?.closest?.('button, input, textarea, select, a')) return;
+
+      const rect = panel.getBoundingClientRect();
+      dragging = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        startLeft: rect.left,
+        startTop: rect.top,
+        width: rect.width,
+        height: rect.height,
+      };
+
+      panel.style.right = 'auto';
+      panel.style.left = `${rect.left}px`;
+      panel.style.top = `${rect.top}px`;
+      panel.classList.add('dragging');
+
+      try { titleRow.setPointerCapture(event.pointerId); } catch (_) {}
+      event.preventDefault();
+    });
+
+    titleRow.addEventListener('pointermove', (event) => {
+      if (!dragging || event.pointerId !== dragging.pointerId) return;
+
+      const dx = event.clientX - dragging.startX;
+      const dy = event.clientY - dragging.startY;
+      const maxLeft = Math.max(8, window.innerWidth - dragging.width - 8);
+      const visibleHeight = Math.min(dragging.height, window.innerHeight - 16);
+      const maxTop = Math.max(8, window.innerHeight - visibleHeight - 8);
+
+      const left = Math.min(Math.max(8, dragging.startLeft + dx), maxLeft);
+      const top = Math.min(Math.max(8, dragging.startTop + dy), maxTop);
+
+      panel.style.left = `${left}px`;
+      panel.style.top = `${top}px`;
+      event.preventDefault();
+    });
+
+    titleRow.addEventListener('pointerup', (event) => {
+      if (!dragging || event.pointerId !== dragging.pointerId) return;
+      try { titleRow.releasePointerCapture(event.pointerId); } catch (_) {}
+      stopPickerDrag();
+    });
+
+    titleRow.addEventListener('pointercancel', stopPickerDrag);
     const titleBox = document.createElement('div');
     titleRow.appendChild(titleBox);
     const title = document.createElement('div');
@@ -1546,6 +1617,23 @@
     if (!items.length) {
       const empty = document.createElement('div'); empty.className = 'ja-empty'; empty.textContent = '本地档案没有可展示的数据。'; list.appendChild(empty);
     }
+
+    const keepPickerInViewport = () => {
+      if (!panel.isConnected) return;
+      const rect = panel.getBoundingClientRect();
+      const maxLeft = Math.max(8, window.innerWidth - rect.width - 8);
+      const visibleHeight = Math.min(rect.height, window.innerHeight - 16);
+      const maxTop = Math.max(8, window.innerHeight - visibleHeight - 8);
+      const left = Math.min(Math.max(8, rect.left), maxLeft);
+      const top = Math.min(Math.max(8, rect.top), maxTop);
+
+      if (panel.style.left) {
+        panel.style.left = `${left}px`;
+        panel.style.top = `${top}px`;
+        pickerPosition = {left, top};
+      }
+    };
+    window.addEventListener('resize', keepPickerInViewport, {passive: true});
 
     search.addEventListener('input', () => {
       const q = norm(search.value);
