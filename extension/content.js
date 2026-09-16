@@ -1,4 +1,7 @@
 (() => {
+  if (globalThis.__JOB_AUTOFILL_CONTENT_LOADED__) return;
+  globalThis.__JOB_AUTOFILL_CONTENT_LOADED__ = true;
+
   const API = 'http://127.0.0.1:8765';
   let registry = new Map();
 
@@ -1432,6 +1435,22 @@
     return items;
   }
 
+  function pickerCategory(group) {
+    const g = clean(group);
+    if (g.startsWith('基本信息')) return '基本';
+    if (g.startsWith('教育经历')) return '教育';
+    if (g.startsWith('实习经历')) return '实习';
+    if (g.startsWith('项目经历')) return '项目';
+    if (g.startsWith('校园经历')) return '校园';
+    if (g.startsWith('技能水平')) return '技能';
+    if (g.startsWith('获奖经历')) return '获奖';
+    if (g.startsWith('家庭关系') || g.startsWith('紧急联系人')) return '家庭';
+    if (g.startsWith('个人描述')) return '个人';
+    if (g.startsWith('求职偏好')) return '求职';
+    if (g.startsWith('长文本')) return '长文本';
+    return '其他';
+  }
+
   function closeFieldPicker() {
     if (pickerHost?.isConnected) pickerHost.remove();
     pickerHost = null;
@@ -1442,7 +1461,7 @@
     return `
       :host{all:initial}*{box-sizing:border-box}
       .ja-panel{position:fixed;right:18px;top:18px;width:min(440px,calc(100vw - 36px));max-height:calc(100vh - 36px);z-index:2147483647;background:#fff;color:#111827;border:1px solid #d1d5db;border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.22);font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;font-size:13px;display:flex;flex-direction:column;overflow:hidden}
-      .ja-head{padding:14px;border-bottom:1px solid #e5e7eb}.ja-title-row{display:flex;justify-content:space-between;gap:12px;cursor:grab;user-select:none;touch-action:none}.ja-panel.dragging .ja-title-row{cursor:grabbing}.ja-title{font-size:17px;font-weight:700}.ja-close{border:0;background:transparent;color:#6b7280;font-size:22px;cursor:pointer;touch-action:auto}.ja-help{font-size:12px;color:#6b7280;line-height:1.5;margin-top:5px}.ja-target{margin-top:9px;padding:8px 10px;border-radius:8px;background:#f3f4f6;color:#374151;font-size:12px;line-height:1.4}.ja-target.ready{background:#ecfdf5;color:#166534}.ja-search{margin-top:9px;width:100%;border:1px solid #d1d5db;border-radius:8px;padding:9px 10px;font:inherit;color:#111827;background:#fff;outline:none}.ja-search:focus{border-color:#111827}.ja-status{font-size:12px;color:#4b5563;margin-top:8px;min-height:17px;line-height:1.4}
+      .ja-head{padding:14px;border-bottom:1px solid #e5e7eb}.ja-title-row{display:flex;justify-content:space-between;gap:12px;cursor:grab;user-select:none;touch-action:none}.ja-panel.dragging .ja-title-row{cursor:grabbing}.ja-title{font-size:17px;font-weight:700}.ja-close{border:0;background:transparent;color:#6b7280;font-size:22px;cursor:pointer;touch-action:auto}.ja-help{font-size:12px;color:#6b7280;line-height:1.5;margin-top:5px}.ja-target{margin-top:9px;padding:8px 10px;border-radius:8px;background:#f3f4f6;color:#374151;font-size:12px;line-height:1.4}.ja-target.ready{background:#ecfdf5;color:#166534}.ja-tabs{display:flex;gap:6px;margin-top:9px;padding-bottom:2px;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin}.ja-tab{flex:0 0 auto;border:1px solid #d1d5db;background:#fff;color:#4b5563;border-radius:999px;padding:6px 10px;font:inherit;font-size:12px;line-height:1;cursor:pointer;white-space:nowrap}.ja-tab:hover{border-color:#9ca3af;color:#111827}.ja-tab.active{background:#111827;color:#fff;border-color:#111827}.ja-tab-count{opacity:.7;margin-left:3px;font-size:10px}.ja-search{margin-top:8px;width:100%;border:1px solid #d1d5db;border-radius:8px;padding:9px 10px;font:inherit;color:#111827;background:#fff;outline:none}.ja-search:focus{border-color:#111827}.ja-status{font-size:12px;color:#4b5563;margin-top:8px;min-height:17px;line-height:1.4}
       .ja-list{overflow:auto;padding:9px 10px 12px;background:#f9fafb;overscroll-behavior:contain}.ja-row{width:100%;display:block;text-align:left;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:10px;margin-bottom:8px;cursor:pointer;color:#111827}.ja-row:hover,.ja-row:focus{border-color:#111827;outline:none}.ja-row.ok{border-color:#22c55e;background:#f0fdf4}.ja-row.fail{border-color:#ef4444;background:#fef2f2}.ja-group{font-size:10px;color:#9ca3af;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ja-label{font-size:13px;font-weight:650;margin-top:2px}.ja-value{font-size:12px;color:#374151;margin-top:4px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;word-break:break-all}.ja-key{font-size:10px;color:#9ca3af;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ja-empty{padding:22px 12px;text-align:center;color:#6b7280;background:#fff;border:1px dashed #d1d5db;border-radius:10px}
       @media(max-width:520px){.ja-panel{right:8px;top:8px;width:calc(100vw - 16px);max-height:calc(100vh - 16px)}}
     `;
@@ -1567,6 +1586,38 @@
     status.className = 'ja-status';
     status.textContent = `已加载 ${items.length} 条本地数据。`;
     head.appendChild(status);
+
+    const categoryOrder = ['全部', '基本', '教育', '实习', '项目', '校园', '技能', '获奖', '家庭', '个人', '求职', '长文本'];
+    const categoryCounts = new Map();
+    for (const item of items) {
+      const category = pickerCategory(item.group);
+      categoryCounts.set(category, (categoryCounts.get(category) || 0) + 1);
+    }
+
+    const tabs = document.createElement('div');
+    tabs.className = 'ja-tabs';
+    tabs.setAttribute('role', 'tablist');
+    tabs.setAttribute('aria-label', '数据分类');
+    head.appendChild(tabs);
+
+    let activeCategory = '全部';
+    const tabButtons = [];
+
+    for (const category of categoryOrder) {
+      const count = category === '全部' ? items.length : (categoryCounts.get(category) || 0);
+      if (category !== '全部' && count === 0) continue;
+
+      const tab = document.createElement('button');
+      tab.type = 'button';
+      tab.className = `ja-tab${category === '全部' ? ' active' : ''}`;
+      tab.dataset.category = category;
+      tab.setAttribute('role', 'tab');
+      tab.setAttribute('aria-selected', category === '全部' ? 'true' : 'false');
+      tab.innerHTML = `${category}<span class="ja-tab-count">${count}</span>`;
+      tabs.appendChild(tab);
+      tabButtons.push(tab);
+    }
+
     const search = document.createElement('input');
     search.type = 'search'; search.className = 'ja-search'; search.placeholder = '搜索姓名、学校、单位、奖项、电话…';
     head.appendChild(search);
@@ -1591,6 +1642,7 @@
     for (const item of items) {
       const row = document.createElement('button');
       row.type = 'button'; row.className = 'ja-row';
+      row.dataset.category = pickerCategory(item.group);
       row.dataset.search = norm(`${item.group} ${item.label} ${item.text} ${item.key}`);
       const group = document.createElement('div'); group.className = 'ja-group'; group.textContent = item.group; row.appendChild(group);
       const label = document.createElement('div'); label.className = 'ja-label'; label.textContent = item.label; row.appendChild(label);
@@ -1635,16 +1687,40 @@
     };
     window.addEventListener('resize', keepPickerInViewport, {passive: true});
 
-    search.addEventListener('input', () => {
+    function applyPickerFilter() {
       const q = norm(search.value);
       let visible = 0;
+
       for (const row of rows) {
-        const show = !q || row.dataset.search.includes(q);
+        const categoryOk = activeCategory === '全部' || row.dataset.category === activeCategory;
+        const searchOk = !q || row.dataset.search.includes(q);
+        const show = categoryOk && searchOk;
         row.style.display = show ? 'block' : 'none';
         if (show) visible += 1;
       }
-      status.textContent = q ? `搜索结果 ${visible} 条。` : `已加载 ${items.length} 条本地数据。`;
-    });
+
+      if (q) {
+        status.textContent = `${activeCategory === '全部' ? '' : activeCategory + ' · '}搜索结果 ${visible} 条。`;
+      } else if (activeCategory !== '全部') {
+        status.textContent = `${activeCategory}：${visible} 条本地数据。`;
+      } else {
+        status.textContent = `已加载 ${items.length} 条本地数据。`;
+      }
+    }
+
+    for (const tab of tabButtons) {
+      tab.addEventListener('click', () => {
+        activeCategory = tab.dataset.category || '全部';
+        for (const button of tabButtons) {
+          const active = button === tab;
+          button.classList.toggle('active', active);
+          button.setAttribute('aria-selected', active ? 'true' : 'false');
+        }
+        applyPickerFilter();
+      });
+    }
+
+    search.addEventListener('input', applyPickerFilter);
 
     return {total: items.length, matched: items.length};
   }
