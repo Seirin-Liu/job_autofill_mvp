@@ -11,14 +11,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
-from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
-try:
-    from openai import OpenAI
-except (ImportError, AttributeError):  # rule-only mode still works without the SDK
-    OpenAI = None  # type: ignore
 from pydantic import BaseModel, Field
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -26,36 +21,9 @@ DATA_DIR = ROOT / "data"
 DB_PATH = DATA_DIR / "autofill.db"
 SEED_PATH = DATA_DIR / "profile_seed.json"
 SEED_HASH_KEY = "profile_seed_hash"
-ENV_PATH = ROOT / ".env"
 EDITOR_PATH = ROOT / "backend" / "profile_editor.html"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-
-def load_dotenv_robust(path: Path) -> str:
-    """Load .env files saved by common Windows editors without crashing startup.
-
-    UTF-8 is preferred, but legacy Windows/Chinese editors may save the file as
-    GBK/GB18030 or UTF-16. We retry those encodings and keep rule-only mode
-    available even if the file is malformed.
-    """
-    if not path.exists():
-        return "missing"
-    last_error = None
-    for encoding in ("utf-8-sig", "utf-8", "gb18030", "cp936", "utf-16", "cp1252"):
-        try:
-            load_dotenv(path, encoding=encoding, override=False)
-            return encoding
-        except (UnicodeDecodeError, UnicodeError) as exc:
-            last_error = exc
-        except Exception as exc:
-            # Parsing errors should not make the whole local service unusable.
-            last_error = exc
-            break
-    print(f"Warning: could not read {path.name}; starting without it: {last_error}")
-    return "unreadable"
-
-
-ENV_ENCODING = load_dotenv_robust(ENV_PATH)
 
 DEFAULT_PROFILE: Dict[str, Any] = {
     "basic": {
@@ -609,15 +577,12 @@ def init_db() -> None:
             (json.dumps(profile, ensure_ascii=False),),
         )
 
-        cur = conn.execute("SELECT value FROM kv WHERE key='model'")
-        if cur.fetchone() is None:
-            conn.execute("INSERT INTO kv(key, value) VALUES('model', ?)", (os.getenv("DEEPSEEK_MODEL", "deepseek-v4-pro"),))
         conn.commit()
 
 
 init_db()
 
-app = FastAPI(title="Job Autofill Local Service", version="1.5.0")
+app = FastAPI(title="Job Autofill Local Service", version="1.6.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -641,7 +606,6 @@ class FieldInfo(BaseModel):
 class MatchRequest(BaseModel):
     page_url: str = ""
     fields: List[FieldInfo]
-    use_ai: bool = True
 
 
 class MatchResult(BaseModel):
@@ -658,10 +622,6 @@ class ProfilePayload(BaseModel):
     profile: Dict[str, Any]
 
 
-class ModelPayload(BaseModel):
-    model: str
-
-
 class FeedbackPayload(BaseModel):
     page_url: str
     fingerprint: str
@@ -673,7 +633,6 @@ class RepeatablePlanRequest(BaseModel):
     kind: str
     controls: List[FieldInfo]
     record: Dict[str, Any] = Field(default_factory=dict)
-    use_ai: bool = True
 
 
 class RepeatableOptionRequest(BaseModel):
@@ -683,7 +642,6 @@ class RepeatableOptionRequest(BaseModel):
     value: Any = None
     options: List[str] = Field(default_factory=list)
     record: Dict[str, Any] = Field(default_factory=dict)
-    use_ai: bool = True
 
 
 def normalize_text(text: Any) -> str:
@@ -696,12 +654,6 @@ def get_profile() -> Dict[str, Any]:
     with db() as conn:
         row = conn.execute("SELECT value FROM kv WHERE key='profile'").fetchone()
     return json.loads(row["value"]) if row else copy.deepcopy(DEFAULT_PROFILE)
-
-
-def get_model() -> str:
-    with db() as conn:
-        row = conn.execute("SELECT value FROM kv WHERE key='model'").fetchone()
-    return row["value"] if row else os.getenv("DEEPSEEK_MODEL", "deepseek-v4-pro")
 
 
 def get_by_path(data: Any, path: str) -> Any:
@@ -1042,69 +994,6 @@ def repeatable_value(kind: str, record: Dict[str, Any], key: str) -> Any:
     return default if value_present(default) else None
 
 
-def llm_repeatable_plan(kind: str, fields: List[FieldInfo]) -> Dict[str, Dict[str, Any]]:
-    api_key = os.getenv("DEEPSEEK_API_KEY", "").strip()
-    defs = REPEATABLE_FIELD_DEFS.get(kind)
-    if OpenAI is None or not api_key or not fields or not defs:
-        return {}
-    allowed_keys = list(defs.keys())
-    safe_fields = [
-        {
-            "id": f.id,
-            "label": f.label[:160],
-            "placeholder": f.placeholder[:120],
-            "name": f.name[:120],
-            "type": f.type,
-            "options": f.options[:40],
-            "context": f.context[:220],
-        }
-        for f in fields
-    ]
-    system = (
-        "你是招聘网站重复经历表单的字段语义匹配器。只判断网页字段对应哪个结构化字段，不生成候选人资料。"
-        "必须严格输出 JSON。record_key 只能来自 allowed_record_keys 或 null。"
-        "特别注意：工作经历表单中的‘工作类型’不能误判为获奖类型；获奖表单中的‘时间’也不能映射到工作经历日期。"
-    )
-    user = {
-        "kind": kind,
-        "allowed_record_keys": allowed_keys,
-        "controls": safe_fields,
-        "output_example": {"matches": [{"id": "c1", "record_key": "end_date", "confidence": 0.98, "reason": "离职时间"}]},
-    }
-    try:
-        client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
-        response = client.chat.completions.create(
-            model=get_model(),
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": json.dumps(user, ensure_ascii=False)},
-            ],
-            response_format={"type": "json_object"},
-            temperature=0,
-            max_tokens=1400,
-        )
-        payload = json.loads(response.choices[0].message.content or "{}")
-        out: Dict[str, Dict[str, Any]] = {}
-        for item in payload.get("matches", []):
-            fid = str(item.get("id", ""))
-            key = item.get("record_key")
-            if key not in allowed_keys:
-                continue
-            try:
-                conf = float(item.get("confidence", 0))
-            except (TypeError, ValueError):
-                conf = 0.0
-            out[fid] = {
-                "record_key": key,
-                "confidence": max(0.0, min(1.0, conf)),
-                "reason": str(item.get("reason", "AI语义匹配"))[:200],
-            }
-        return out
-    except Exception as exc:
-        print(f"DeepSeek repeatable plan failed: {exc}")
-        return {}
-
-
 def local_repeatable_option(kind: str, record_key: str, value: Any, options: List[str], record: Dict[str, Any]) -> Optional[str]:
     if not options:
         return None
@@ -1130,125 +1019,6 @@ def local_repeatable_option(kind: str, record_key: str, value: Any, options: Lis
     return best if best_score >= 0.58 else None
 
 
-def llm_repeatable_option(req: RepeatableOptionRequest) -> Optional[str]:
-    api_key = os.getenv("DEEPSEEK_API_KEY", "").strip()
-    if OpenAI is None or not api_key or not req.options:
-        return None
-    compact_record = {
-        k: str(req.record.get(k, ""))[:240]
-        for k in ("company", "role", "city", "work_type", "name", "level", "type", "relation", "age", "employer", "department", "position", "political_status", "is_china_post_employee")
-        if value_present(req.record.get(k))
-    }
-    system = (
-        "你负责在招聘网站下拉选项中选择最符合候选人已有结构化记录的一项。"
-        "只能返回 options 中的原文，无法确定就返回 null。不要虚构经历。严格 JSON。"
-    )
-    user = {
-        "kind": req.kind,
-        "field_label": req.field_label,
-        "record_key": req.record_key,
-        "current_value": req.value,
-        "record_context": compact_record,
-        "options": req.options[:80],
-        "output_example": {"choice": "软件开发", "confidence": 0.91, "reason": "岗位为软件开发"},
-    }
-    try:
-        client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
-        response = client.chat.completions.create(
-            model=get_model(),
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": json.dumps(user, ensure_ascii=False)},
-            ],
-            response_format={"type": "json_object"},
-            temperature=0,
-            max_tokens=500,
-        )
-        payload = json.loads(response.choices[0].message.content or "{}")
-        choice = payload.get("choice")
-        if choice in req.options:
-            try:
-                conf = float(payload.get("confidence", 0))
-            except (TypeError, ValueError):
-                conf = 0.0
-            return choice if conf >= 0.55 else None
-    except Exception as exc:
-        print(f"DeepSeek repeatable option failed: {exc}")
-    return None
-
-def llm_match(fields: List[FieldInfo], profile: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
-    api_key = os.getenv("DEEPSEEK_API_KEY", "").strip()
-    if OpenAI is None or not api_key or not fields:
-        return {}
-
-    allowed_keys = [k for k in FIELD_DEFS if value_present(get_by_path(profile, k))]
-    if not allowed_keys:
-        return {}
-
-    safe_fields = [
-        {
-            "id": f.id,
-            "label": f.label[:120],
-            "placeholder": f.placeholder[:120],
-            "name": f.name[:120],
-            "type": f.type,
-            "options": f.options[:30],
-            "context": f.context[:220],
-        }
-        for f in fields
-    ]
-
-    system = (
-        "你是招聘表单字段匹配器。只做字段语义分类，不猜测候选人的真实个人信息。"
-        "请严格输出 json。每个字段只能映射到 allowed_profile_keys 中的一个 key，或 null。"
-        "confidence 取 0~1。不要根据 options 伪造个人资料。"
-        "对于重复的教育/实习记录，只有上下文明确指出第几段、最近一段、本科/硕士时才映射到对应索引；否则宁可返回 null。"
-    )
-    user = {
-        "task": "将网页招聘表单字段映射到本地 profile schema。只返回 JSON。",
-        "allowed_profile_keys": allowed_keys,
-        "fields": safe_fields,
-        "output_example": {
-            "matches": [
-                {"id": "f1", "profile_key": "basic.email", "confidence": 0.98, "reason": "字段询问电子邮箱"}
-            ]
-        },
-    }
-
-    try:
-        client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
-        response = client.chat.completions.create(
-            model=get_model(),
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": json.dumps(user, ensure_ascii=False)},
-            ],
-            response_format={"type": "json_object"},
-            temperature=0,
-            max_tokens=2200,
-        )
-        content = response.choices[0].message.content or "{}"
-        payload = json.loads(content)
-        result: Dict[str, Dict[str, Any]] = {}
-        for item in payload.get("matches", []):
-            field_id = str(item.get("id", ""))
-            key = item.get("profile_key")
-            if key not in allowed_keys:
-                continue
-            try:
-                conf = float(item.get("confidence", 0.0))
-            except (TypeError, ValueError):
-                conf = 0.0
-            result[field_id] = {
-                "profile_key": key,
-                "confidence": max(0.0, min(1.0, conf)),
-                "reason": str(item.get("reason", "AI语义匹配"))[:200],
-            }
-        return result
-    except Exception as exc:
-        print(f"DeepSeek match failed: {exc}")
-        return {}
-
 
 @app.get("/api/status")
 def status() -> Dict[str, Any]:
@@ -1257,9 +1027,6 @@ def status() -> Dict[str, Any]:
         "ok": True,
         "db": str(DB_PATH),
         "profile_seed": str(SEED_PATH),
-        "env_encoding": ENV_ENCODING,
-        "deepseek_configured": bool(os.getenv("DEEPSEEK_API_KEY", "").strip()),
-        "model": get_model(),
         "profile_name": get_by_path(profile, "basic.name_cn") or "",
         "education_count": len(profile.get("education", [])),
         "internship_count": len(profile.get("internships", [])),
@@ -1297,20 +1064,6 @@ def update_profile(payload: ProfilePayload) -> Dict[str, Any]:
     return {"ok": True, "profile": profile, "seed_path": str(SEED_PATH)}
 
 
-@app.put("/api/model")
-def update_model(payload: ModelPayload) -> Dict[str, Any]:
-    model = payload.model.strip()
-    if not model:
-        raise HTTPException(status_code=400, detail="model 不能为空")
-    with db() as conn:
-        conn.execute(
-            "INSERT INTO kv(key, value) VALUES('model', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-            (model,),
-        )
-        conn.commit()
-    return {"ok": True, "model": model}
-
-
 @app.post("/api/feedback")
 def save_feedback(payload: FeedbackPayload) -> Dict[str, Any]:
     hostname = urlparse(payload.page_url).hostname or ""
@@ -1346,11 +1099,6 @@ def repeatable_plan(req: RepeatablePlanRequest) -> Dict[str, Any]:
         else:
             unresolved.append(field)
 
-    if req.use_ai and unresolved:
-        for fid, item in llm_repeatable_plan(req.kind, unresolved).items():
-            if item.get("confidence", 0) >= 0.55:
-                assignments[fid] = {**item, "source": "ai"}
-
     out = []
     for field in req.controls:
         item = assignments.get(field.id)
@@ -1375,7 +1123,6 @@ def repeatable_plan(req: RepeatablePlanRequest) -> Dict[str, Any]:
         "stats": {
             "total": len(req.controls),
             "matched": len(out),
-            "ai": sum(1 for x in out if x.get("source") == "ai"),
         },
     }
 
@@ -1390,10 +1137,6 @@ def repeatable_choose_option(req: RepeatableOptionRequest) -> Dict[str, Any]:
     local = local_repeatable_option(req.kind, req.record_key, req.value, options, req.record)
     if local:
         return {"choice": local, "source": "rule"}
-    if req.use_ai:
-        choice = llm_repeatable_option(req.model_copy(update={"options": options}))
-        if choice:
-            return {"choice": choice, "source": "ai"}
     return {"choice": None, "source": "unmatched"}
 
 
@@ -1429,23 +1172,8 @@ def match_fields(req: MatchRequest) -> Dict[str, Any]:
         else:
             unresolved.append(field)
 
-    ai_results = llm_match(unresolved, profile) if req.use_ai else {}
     for field in unresolved:
-        ai = ai_results.get(field.id)
-        if ai and ai["confidence"] >= 0.55:
-            key = ai["profile_key"]
-            value = get_by_path(profile, key)
-            results[field.id] = MatchResult(
-                id=field.id,
-                profile_key=key,
-                value=value,
-                fill_value=resolve_option(value, field.options),
-                confidence=round(ai["confidence"], 3),
-                source="ai",
-                reason=ai["reason"],
-            )
-        else:
-            results[field.id] = MatchResult(id=field.id)
+        results[field.id] = MatchResult(id=field.id)
 
     ordered = [results[f.id].model_dump() for f in req.fields]
     return {
@@ -1455,7 +1183,6 @@ def match_fields(req: MatchRequest) -> Dict[str, Any]:
             "matched": sum(1 for r in ordered if r.get("profile_key")),
             "rule": sum(1 for r in ordered if r.get("source") == "rule"),
             "history": sum(1 for r in ordered if r.get("source") == "history"),
-            "ai": sum(1 for r in ordered if r.get("source") == "ai"),
         },
     }
 

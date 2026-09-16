@@ -800,7 +800,7 @@
     return clean(input?.value || '');
   }
 
-  async function chooseOptionViaApi(kind, label, recordKey, value, options, record, useAi) {
+  async function chooseOptionViaApi(kind, label, recordKey, value, options, record) {
     if (!options.length) return null;
     try {
       const data = await postJson('/api/repeatable/choose-option', {
@@ -810,7 +810,6 @@
         value,
         options,
         record,
-        use_ai: !!useAi,
       });
       return data.choice || null;
     } catch (_) {
@@ -819,7 +818,7 @@
   }
 
   async function chooseCustomSelect(el, value, context) {
-    const {kind, label, recordKey, record, useAi} = context;
+    const {kind, label, recordKey, record} = context;
     const initialValues = [];
     if (value != null && value !== '') initialValues.push(value);
     if (kind === 'internships' && recordKey === 'work_type') {
@@ -847,7 +846,7 @@
 
     if (!best && options.length) {
       const optionTexts = options.map(clickableText).map(clean).filter(Boolean);
-      const choice = await chooseOptionViaApi(kind, label, recordKey, value, optionTexts, record, useAi);
+      const choice = await chooseOptionViaApi(kind, label, recordKey, value, optionTexts, record);
       if (choice) best = options.find(o => clean(clickableText(o)) === choice) || null;
     }
 
@@ -873,7 +872,7 @@
     if (el.tagName === 'SELECT') {
       if (formatted && chooseSelect(el, formatted)) return true;
       const options = [...el.options].map(o => clean(o.textContent || o.value)).filter(Boolean);
-      const choice = await chooseOptionViaApi(context.kind, label, context.recordKey, value, options, context.record, context.useAi);
+      const choice = await chooseOptionViaApi(context.kind, label, context.recordKey, value, options, context.record);
       return choice ? chooseSelect(el, choice) : false;
     }
 
@@ -920,7 +919,7 @@
     } catch (_) {}
   }
 
-  async function fillEditor(kind, editor, record, useAi) {
+  async function fillEditor(kind, editor, record) {
     const normalized = normalizeRecord(kind, record);
     const controls = visibleControls(editor).filter(el => {
       const type = (el.getAttribute?.('type') || '').toLowerCase();
@@ -933,7 +932,6 @@
         kind,
         controls: entries.map(x => x.meta),
         record: normalized,
-        use_ai: !!useAi,
       });
     } catch (_) {
       // Local JS mapping remains as an offline fallback if a future backend endpoint is unavailable.
@@ -962,7 +960,6 @@
         label: entry.meta.label,
         recordKey: key,
         record: normalized,
-        useAi,
       });
       byKey.set(key, entry.el);
       if (ok) {
@@ -982,7 +979,7 @@
       }
     }
     if (problems.length) highlightProblem(problems[0].el);
-    return {filled, keys: details, problems, ai: plan.stats?.ai || 0};
+    return {filled, keys: details, problems};
   }
 
   function findConfirmButton(editor) {
@@ -1078,7 +1075,7 @@
     return text.includes(norm(identity));
   }
 
-  async function addOneRepeatable(kind, record, useAi) {
+  async function addOneRepeatable(kind, record) {
     let sectionInfo = findSection(kind);
     if (!sectionInfo) return {status: 'no-section', filled: 0};
     if (recordAlreadyPresent(kind, sectionInfo.section, record)) return {status: 'skipped', filled: 0};
@@ -1092,7 +1089,7 @@
     const editor = await waitFor(() => detectEditor(sectionInfo, before, kind), 3200, 100);
     if (!editor) return {status: 'editor-timeout', filled: 0};
 
-    let fill = await fillEditor(kind, editor, record, useAi);
+    let fill = await fillEditor(kind, editor, record);
     if (fill.filled === 0) return {status: 'no-fields', filled: 0, keys: [], problems: []};
     if (fill.problems.length) {
       return {
@@ -1100,18 +1097,10 @@
         filled: fill.filled,
         keys: fill.keys,
         problems: fill.problems.map(x => x.label),
-        ai: fill.ai,
       };
     }
 
-    let submit = await submitEditor(kind, editor, record);
-    if (submit.status === 'validation-error' && useAi && editor.isConnected && isVisible(editor)) {
-      // One bounded repair pass only. The validation text often makes date/select widgets easier
-      // to identify after the first attempt. Never loop indefinitely.
-      await sleep(180);
-      fill = await fillEditor(kind, editor, record, true);
-      if (!fill.problems.length) submit = await submitEditor(kind, editor, record);
-    }
+    const submit = await submitEditor(kind, editor, record);
 
     await sleep(160);
     return {
@@ -1120,11 +1109,10 @@
       keys: fill.keys,
       problems: fill.problems?.map(x => x.label) || [],
       errors: submit.errors || [],
-      ai: fill.ai || 0,
     };
   }
 
-  async function fillRepeatableCollection(kind, records, useAi) {
+  async function fillRepeatableCollection(kind, records) {
     const result = {
       detected: false,
       total: Array.isArray(records) ? records.length : 0,
@@ -1142,7 +1130,7 @@
 
     for (let index = 0; index < records.length; index += 1) {
       const record = records[index];
-      const r = await addOneRepeatable(kind, record, useAi);
+      const r = await addOneRepeatable(kind, record);
       result.attempted += 1;
       result.details.push({index, identity: clean(record?.[REPEATABLE_CONFIG[kind].identityKey]), ...r});
       if (r.status === 'added') result.added += 1;
@@ -1796,12 +1784,12 @@
     return {total: items.length, matched: items.length};
   }
 
-  async function run(useAi) {
+  async function run() {
     const fields = scanFields();
     const response = await fetch(`${API}/api/match`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({page_url: location.href, fields, use_ai: !!useAi}),
+      body: JSON.stringify({page_url: location.href, fields}),
     });
     if (!response.ok) throw new Error(`本地服务返回 ${response.status}`);
     const data = await response.json();
@@ -1826,26 +1814,26 @@
       if (p.ok) profile = (await p.json()).profile || {};
     } catch (_) {}
 
-    const internships = await fillRepeatableCollection('internships', profile.internships || [], !!useAi);
+    const internships = await fillRepeatableCollection('internships', profile.internships || []);
     // A failed editor is normally still open. Never let the next collection write into it.
     const projects = internships.stopped && internships.failed > 0
       ? blockedRepeatable('projects', profile.projects || [], 'blocked-by-prior-repeatable-failure')
-      : await fillRepeatableCollection('projects', profile.projects || [], !!useAi);
+      : await fillRepeatableCollection('projects', profile.projects || []);
     const beforeAwardsFailed = (internships.stopped && internships.failed > 0) || (projects.stopped && projects.failed > 0);
     const awards = beforeAwardsFailed
       ? blockedRepeatable('awards', profile.awards || [], 'blocked-by-prior-repeatable-failure')
-      : await fillRepeatableCollection('awards', profile.awards || [], !!useAi);
+      : await fillRepeatableCollection('awards', profile.awards || []);
     const priorFailed = beforeAwardsFailed || (awards.stopped && awards.failed > 0);
     const family = priorFailed
       ? blockedRepeatable('family', profile.family?.members || [], 'blocked-by-prior-repeatable-failure')
-      : await fillRepeatableCollection('family', profile.family?.members || [], !!useAi);
+      : await fillRepeatableCollection('family', profile.family?.members || []);
 
     return {...data.stats, filled, repeatable: {internships, projects, awards, family}};
   }
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type === 'JOB_AUTOFILL_SCAN_AND_FILL') {
-      run(message.useAi)
+      run()
         .then(stats => sendResponse({ok: true, stats}))
         .catch(err => sendResponse({ok: false, error: err.message || String(err)}));
       return true;

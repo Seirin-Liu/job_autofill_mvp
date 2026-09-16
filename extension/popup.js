@@ -5,10 +5,8 @@ const statusDot = document.getElementById('statusDot');
 const scanBtn = document.getElementById('scanBtn');
 const pickBtn = document.getElementById('pickBtn');
 const resultBox = document.getElementById('resultBox');
-const useAi = document.getElementById('useAi');
 const profileForm = document.getElementById('profileForm');
 const profileMsg = document.getElementById('profileMsg');
-const modelInput = document.getElementById('modelInput');
 const importSummary = document.getElementById('importSummary');
 const hiddenProfileSummary = document.getElementById('hiddenProfileSummary');
 
@@ -126,8 +124,7 @@ async function refreshStatus() {
     const s = await api('/api/status');
     statusDot.className = 'dot ok';
     const who = s.profile_name ? ` · 档案 ${s.profile_name}` : '';
-    statusText.textContent = `本地服务已连接${who} · AI ${s.deepseek_configured ? '已配置' : '未配置'}`;
-    modelInput.value = s.model || '';
+    statusText.textContent = `本地服务已连接${who}`;
     scanBtn.disabled = false;
     pickBtn.disabled = false;
   } catch (e) {
@@ -234,15 +231,6 @@ async function sendToActivePage(message) {
   }
 }
 
-document.getElementById('saveModelBtn').addEventListener('click', async () => {
-  try {
-    await api('/api/model', {method: 'PUT', body: JSON.stringify({model: modelInput.value.trim()})});
-    statusText.textContent = '模型设置已保存';
-  } catch (e) {
-    statusText.textContent = `保存失败：${e.message}`;
-  }
-});
-
 pickBtn.addEventListener('click', async () => {
   pickBtn.disabled = true;
   resultBox.classList.add('muted');
@@ -268,7 +256,6 @@ scanBtn.addEventListener('click', async () => {
   try {
     const response = await sendToActivePage({
       type: 'JOB_AUTOFILL_SCAN_AND_FILL',
-      useAi: useAi.checked,
     });
     if (!response?.ok) throw new Error(response?.error || '页面脚本未响应。请刷新招聘页面后重试。');
     const s = response.stats;
@@ -306,7 +293,7 @@ scanBtn.addEventListener('click', async () => {
     const familyLine = repeatLine('家庭关系', rep.family);
     if (familyLine) repLines.push(familyLine);
     resultBox.classList.remove('muted');
-    resultBox.textContent = `普通字段：检测 ${s.total} · 匹配 ${s.matched} · 填写 ${s.filled}\n规则 ${s.rule} · 历史 ${s.history} · AI ${s.ai}${repLines.length ? `\n${repLines.join('\n')}` : ''}`;
+    resultBox.textContent = `普通字段：检测 ${s.total} · 匹配 ${s.matched} · 填写 ${s.filled}\n规则 ${s.rule} · 历史 ${s.history}${repLines.length ? `\n${repLines.join('\n')}` : ''}`;
   } catch (e) {
     resultBox.textContent = `失败：${e.message}`;
   } finally {
