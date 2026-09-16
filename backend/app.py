@@ -593,7 +593,7 @@ def init_db() -> None:
 
 init_db()
 
-app = FastAPI(title="Job Autofill Local Service", version="1.4.3")
+app = FastAPI(title="Job Autofill Local Service", version="1.4.4")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -724,6 +724,137 @@ def alias_score(text: str, alias: str) -> float:
     return SequenceMatcher(None, nt, na).ratio() * 0.75
 
 
+
+GENERIC_EDUCATION_ALIASES = {
+    "学校", "学校名称", "院校", "学历", "学位", "院系", "学院", "专业",
+    "研究方向", "专业课程", "主要课程", "学习形式", "培养方式", "学科属性",
+    "入学时间", "入学日期", "毕业时间", "毕业日期", "年级排名", "成绩排名",
+    "绩点", "gpa", "是否全日制", "受教育类型", "教育类型", "学制",
+}
+
+
+def education_key_index(key: str) -> Optional[int]:
+    m = re.match(r"education\[(\d+)\]\.", key or "")
+    return int(m.group(1)) if m else None
+
+
+def explicit_education_index(field: FieldInfo) -> Optional[int]:
+    """Infer an education record only from explicit semantic markers."""
+    text = normalize_text(" ".join([
+        field.label, field.placeholder, field.name, field.context
+    ]))
+
+    if any(x in text for x in ("高中", "中学", "高级中学")):
+        return 2
+    if any(x in text for x in ("本科", "学士")):
+        return 1
+    if any(x in text for x in ("硕士", "研究生", "最高学历", "最高学位")):
+        return 0
+    return None
+
+
+def education_index_from_peer_values(field: FieldInfo, profile: Dict[str, Any]) -> Optional[int]:
+    """Use values already present in the same education form block to infer the record.
+
+    Example: if the same form block already contains
+    '北京航空航天大学 / 2024-09-01 / 2027-07-01', it should match the
+    postgraduate education record even when the current label is only '学历'.
+    """
+    explicit = explicit_education_index(field)
+    if explicit is not None:
+        return explicit
+
+    context = normalize_text(field.context)
+    if not context:
+        return None
+
+    education = profile.get("education")
+    if not isinstance(education, list):
+        return None
+
+    weighted_fields = (
+        ("school", 5.0),
+        ("start_date", 3.0),
+        ("end_date", 3.0),
+        ("college", 2.5),
+        ("major", 2.5),
+        ("research_direction", 2.0),
+        ("degree", 1.0),
+        ("academic_degree", 1.0),
+    )
+
+    scores: List[tuple[int, float]] = []
+    for idx, record in enumerate(education):
+        if not isinstance(record, dict):
+            continue
+
+        score = 0.0
+        for key, weight in weighted_fields:
+            raw = record.get(key)
+            if not value_present(raw):
+                continue
+            token = normalize_text(raw)
+            # Very short values such as “是/否” are not useful identifiers.
+            if len(token) < 4:
+                continue
+            if token in context:
+                score += weight
+
+        scores.append((idx, score))
+
+    if not scores:
+        return None
+
+    scores.sort(key=lambda x: x[1], reverse=True)
+    best_idx, best_score = scores[0]
+    second_score = scores[1][1] if len(scores) > 1 else 0.0
+
+    # Require at least one strong identifier (usually school/date) and a clear lead.
+    if best_score >= 3.0 and best_score >= second_score + 1.0:
+        return best_idx
+    return None
+
+
+def generic_education_field(field: FieldInfo) -> bool:
+    """True for ambiguous labels such as simply '学历' or '毕业时间'."""
+    own_text = normalize_text(" ".join([field.label, field.placeholder, field.name]))
+    if not own_text:
+        return False
+
+    for alias in GENERIC_EDUCATION_ALIASES:
+        na = normalize_text(alias)
+        if own_text == na or own_text.startswith(na) or na in own_text:
+            # Explicit stage words make it safe/non-generic.
+            if any(marker in own_text for marker in (
+                "高中", "中学", "本科", "硕士", "研究生", "最高学历", "最高学位"
+            )):
+                return False
+            return True
+    return False
+
+
+def saved_mapping_compatible(
+    field: FieldInfo,
+    saved_key: str,
+    profile: Dict[str, Any],
+) -> bool:
+    """Reject stale history when an ambiguous education field points at the wrong record."""
+    idx = education_key_index(saved_key)
+    if idx is None:
+        return True
+
+    inferred = education_index_from_peer_values(field, profile)
+    if inferred is not None:
+        return idx == inferred
+
+    # With no record context, a generic field must never reuse a stored
+    # bachelor/high-school mapping. The safe default rule is highest education.
+    if generic_education_field(field) and idx != 0:
+        return False
+
+    return True
+
+
 def local_match(field: FieldInfo, profile: Dict[str, Any]) -> Optional[MatchResult]:
     text = field_text(field)
     normalized_context = normalize_text(" ".join([field.label, field.context]))
@@ -731,38 +862,66 @@ def local_match(field: FieldInfo, profile: Dict[str, Any]) -> Optional[MatchResu
         marker in normalized_context
         for marker in ("校园经历", "校园活动", "学生干部", "学生工作", "社团经历")
     )
-    high_school_context = any(
+
+    inferred_education_idx = education_index_from_peer_values(field, profile)
+    high_school_context = inferred_education_idx == 2 or any(
         marker in normalized_context
         for marker in ("高中", "中学", "高中教育", "高中经历")
     )
+
     high_school_generic_aliases = {
         "学校名称", "学校", "学历", "学位", "入学时间", "毕业时间",
         "年级排名", "受教育类型", "学制", "是否全日制",
         "是否主要学习经历", "主要学习经历", "学校所属国家", "学校国家", "就读国家",
     }
+
     best_key = None
     best_score = 0.0
     best_alias = ""
+
     for key, aliases in FIELD_DEFS.items():
         value = get_by_path(profile, key)
         if not value_present(value):
             continue
+
+        edu_idx = education_key_index(key)
+
         for alias in aliases:
             if key in {"campus_experience.start_date", "campus_experience.end_date"} and alias in {"开始时间", "结束时间"} and not campus_context:
                 continue
+
+            # Generic education labels such as “学历” must follow the education
+            # record inferred from peer values in the same form block.
+            if edu_idx is not None and inferred_education_idx is not None:
+                if alias in GENERIC_EDUCATION_ALIASES and edu_idx != inferred_education_idx:
+                    continue
+
+            # Existing protection: high-school generic labels are not allowed
+            # outside a confirmed high-school context.
             if key.startswith("education[2].") and alias in high_school_generic_aliases and not high_school_context:
                 continue
+
             score = alias_score(text, alias)
-            # When the DOM context says this block is high-school education, prefer education[2]
-            # over otherwise-identical generic labels from postgraduate/undergraduate records.
+
+            if edu_idx is not None and inferred_education_idx is not None:
+                if edu_idx == inferred_education_idx:
+                    score = min(1.0, score + 0.14)
+                else:
+                    score *= 0.55
+
             if high_school_context and key.startswith("education[2]."):
                 score = min(1.0, score + 0.08)
             elif high_school_context and key.startswith(("education[0].", "education[1].")):
                 score *= 0.78
+
             if score > best_score:
                 best_key, best_score, best_alias = key, score, alias
+
     if best_key and best_score >= 0.74:
         value = get_by_path(profile, best_key)
+        reason = f"规则匹配：{best_alias}"
+        if inferred_education_idx is not None and education_key_index(best_key) is not None:
+            reason += f"；同组教育记录={inferred_education_idx}"
         return MatchResult(
             id=field.id,
             profile_key=best_key,
@@ -770,7 +929,7 @@ def local_match(field: FieldInfo, profile: Dict[str, Any]) -> Optional[MatchResu
             fill_value=resolve_option(value, field.options),
             confidence=round(best_score, 3),
             source="rule",
-            reason=f"规则匹配：{best_alias}",
+            reason=reason,
         )
     return None
 
@@ -1214,7 +1373,11 @@ def match_fields(req: MatchRequest) -> Dict[str, Any]:
 
     for field in req.fields:
         saved_key = get_saved_mapping(hostname, field.fingerprint)
-        if saved_key and value_present(get_by_path(profile, saved_key)):
+        if (
+            saved_key
+            and value_present(get_by_path(profile, saved_key))
+            and saved_mapping_compatible(field, saved_key, profile)
+        ):
             value = get_by_path(profile, saved_key)
             results[field.id] = MatchResult(
                 id=field.id,

@@ -262,13 +262,80 @@
     return clean(parts.filter(Boolean).join(' | '));
   }
 
+  function currentControlValueText(el) {
+    if (!el || !isVisible(el)) return '';
+
+    const type = (el.getAttribute?.('type') || '').toLowerCase();
+    if (['hidden', 'password', 'file', 'submit', 'button', 'reset'].includes(type)) return '';
+
+    if (el.tagName === 'SELECT') {
+      return clean(el.selectedOptions?.[0]?.textContent || el.value);
+    }
+
+    if (type === 'radio' || type === 'checkbox') {
+      return el.checked ? clean(optionText(el)) : '';
+    }
+
+    const raw = clean(el.value);
+    if (raw && !/^(请输入|请选择|请填写)$/i.test(raw) && raw.length <= 100) return raw;
+
+    const selectRoot = customSelectRoot(el);
+    if (selectRoot) {
+      const text = clean(selectRoot.innerText || selectRoot.textContent);
+      if (text && text.length <= 100 && !/请选择|请输入/i.test(text)) return text;
+    }
+
+    return '';
+  }
+
+  function peerValueContext(el) {
+    // 不读取“栏目标题”，只读取当前字段所在的小型表单块里已经存在的值。
+    // 主要用于区分多个教育经历中都叫“学历 / 学位 / 入学时间”的字段。
+    let node = customSelectRoot(el) || el;
+
+    for (let depth = 0; node && depth < 7; depth += 1, node = node.parentElement) {
+      const parent = node.parentElement;
+      if (!parent?.querySelectorAll) continue;
+
+      const controls = [...parent.querySelectorAll('input, textarea, select, [role="combobox"]')]
+        .filter(isVisible);
+
+      // 当前字段自己的 form-item 通常只有 1 个控件；整页通常会非常多。
+      // 选“最近的中等大小表单块”，避免把整个页面都当上下文。
+      if (controls.length < 4 || controls.length > 30) continue;
+
+      const values = [];
+      const seen = new Set();
+
+      for (const control of controls) {
+        if (control === el) continue;
+
+        const text = currentControlValueText(control);
+        const key = norm(text);
+        if (!text || !key || seen.has(key)) continue;
+
+        seen.add(key);
+        values.push(text);
+        if (values.length >= 10) break;
+      }
+
+      if (values.length) {
+        return `同组已有值：${values.join(' | ')}`.slice(0, 320);
+      }
+    }
+
+    return '';
+  }
+
   function contextFor(el) {
-    // 只读取当前字段自己的局部表单信息，不再读取页面栏目标题。
-    // 这样“个人信息 / 实习经历 / 项目经历”等标题不会参与普通字段匹配。
+    // 仍然不使用页面栏目标题。
+    // 仅保留当前字段局部文字 + 同一小型表单块中已经填写的值。
     const container = el.closest?.(
       'fieldset, .form-item, .ant-form-item, .el-form-item, .arco-form-item, [class*="form-item"], [class*="formItem"], [class*="field-item"], [class*="fieldItem"]'
     );
-    return container ? clean(container.innerText || container.textContent).slice(0, 220) : '';
+    const local = container ? clean(container.innerText || container.textContent).slice(0, 180) : '';
+    const peers = peerValueContext(el);
+    return clean([local, peers].filter(Boolean).join(' | ')).slice(0, 420);
   }
 
   function fingerprint(meta) {

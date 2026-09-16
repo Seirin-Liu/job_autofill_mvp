@@ -131,6 +131,57 @@ profileForm.addEventListener('submit', async (event) => {
   }
 });
 
+function unsupportedPage(url) {
+  const u = String(url || '').toLowerCase();
+  return (
+    u.startsWith('chrome://') ||
+    u.startsWith('edge://') ||
+    u.startsWith('about:') ||
+    u.startsWith('chrome-extension://') ||
+    u.startsWith('edge-extension://') ||
+    u.startsWith('devtools://') ||
+    u.startsWith('view-source:')
+  );
+}
+
+function receiverMissing(error) {
+  const text = String(error?.message || error || '');
+  return /receiving end does not exist|could not establish connection|message port closed/i.test(text);
+}
+
+async function sendToActivePage(message) {
+  const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+  if (!tab?.id) throw new Error('无法获取当前标签页');
+  if (unsupportedPage(tab.url)) {
+    throw new Error('当前是浏览器内部页面，插件无法注入。请在普通招聘网页中使用。');
+  }
+
+  try {
+    return await chrome.tabs.sendMessage(tab.id, message);
+  } catch (error) {
+    if (!receiverMissing(error)) throw error;
+
+    // 扩展更新/重新加载后，旧标签页有时没有新的 content script。
+    // 直接补注入一次，不再要求用户反复刷新页面。
+    try {
+      await chrome.scripting.executeScript({
+        target: {tabId: tab.id},
+        files: ['content.js'],
+      });
+    } catch (injectError) {
+      throw new Error(`页面脚本未加载，自动注入也失败：${injectError?.message || injectError}`);
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 120));
+
+    try {
+      return await chrome.tabs.sendMessage(tab.id, message);
+    } catch (retryError) {
+      throw new Error(`页面脚本仍未响应：${retryError?.message || retryError}`);
+    }
+  }
+}
+
 document.getElementById('saveModelBtn').addEventListener('click', async () => {
   try {
     await api('/api/model', {method: 'PUT', body: JSON.stringify({model: modelInput.value.trim()})});
@@ -145,9 +196,7 @@ pickBtn.addEventListener('click', async () => {
   resultBox.classList.add('muted');
   resultBox.textContent = '正在读取本地档案…';
   try {
-    const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
-    if (!tab?.id) throw new Error('无法获取当前标签页');
-    const response = await chrome.tabs.sendMessage(tab.id, {type: 'JOB_AUTOFILL_OPEN_PICKER'});
+    const response = await sendToActivePage({type: 'JOB_AUTOFILL_OPEN_PICKER'});
     if (!response?.ok) throw new Error(response?.error || '页面脚本未响应。请刷新招聘页面后重试。');
     const stats = response.stats || {};
     resultBox.classList.remove('muted');
@@ -165,9 +214,7 @@ scanBtn.addEventListener('click', async () => {
   resultBox.classList.add('muted');
   resultBox.textContent = '正在扫描并匹配字段…';
   try {
-    const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
-    if (!tab?.id) throw new Error('无法获取当前标签页');
-    const response = await chrome.tabs.sendMessage(tab.id, {
+    const response = await sendToActivePage({
       type: 'JOB_AUTOFILL_SCAN_AND_FILL',
       useAi: useAi.checked,
     });
