@@ -12,6 +12,58 @@ const modelInput = document.getElementById('modelInput');
 const importSummary = document.getElementById('importSummary');
 const hiddenProfileSummary = document.getElementById('hiddenProfileSummary');
 
+function addBrowserProfileLink() {
+  if (document.getElementById('openBrowserProfileLink')) return;
+
+  const nav = document.querySelector('nav');
+  if (!nav) return;
+
+  const row = document.createElement('div');
+  row.style.cssText = [
+    'display:flex',
+    'justify-content:flex-end',
+    'align-items:center',
+    'padding:8px 14px 0',
+    'background:#fff'
+  ].join(';');
+
+  const link = document.createElement('a');
+  link.id = 'openBrowserProfileLink';
+  link.href = `${API}/profile`;
+  link.textContent = '在浏览器中编辑完整个人信息 ↗';
+  link.title = '打开本地个人信息编辑页面';
+  link.style.cssText = [
+    'font-size:12px',
+    'color:#2563eb',
+    'text-decoration:none',
+    'cursor:pointer',
+    'font-weight:600'
+  ].join(';');
+
+  link.addEventListener('mouseenter', () => {
+    link.style.textDecoration = 'underline';
+  });
+  link.addEventListener('mouseleave', () => {
+    link.style.textDecoration = 'none';
+  });
+
+  link.addEventListener('click', async (event) => {
+    event.preventDefault();
+    try {
+      await chrome.tabs.create({url: `${API}/profile`});
+      window.close();
+    } catch (_) {
+      // 极少数环境下 tabs.create 不可用时，回退到普通链接打开。
+      window.open(`${API}/profile`, '_blank', 'noopener');
+    }
+  });
+
+  row.appendChild(link);
+  nav.insertAdjacentElement('afterend', row);
+}
+
+addBrowserProfileLink();
+
 for (const tab of document.querySelectorAll('.tab')) {
   tab.addEventListener('click', () => {
     document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
