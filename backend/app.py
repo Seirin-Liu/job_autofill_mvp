@@ -90,12 +90,15 @@ DEFAULT_PROFILE: Dict[str, Any] = {
     "education": [
         {
             "school": "",
+            "school_location_type": "",
+            "school_location": "",
             "degree": "",
             "academic_degree": "",
             "college": "",
             "major": "",
             "research_direction": "",
             "courses": "",
+            "study_form": "",
             "start_date": "",
             "end_date": "",
             "expected_degree_date": "",
@@ -106,6 +109,9 @@ DEFAULT_PROFILE: Dict[str, Any] = {
             "ranking": "",
             "education_type": "",
             "study_length_years": "",
+            "integrated_training": "",
+            "discipline_category": "",
+            "training_mode": "",
             "overseas_study_experience": "",
             "graduation_project": "",
             "school_country": "",
@@ -192,12 +198,15 @@ FIELD_DEFS: Dict[str, List[str]] = {
     "basic.postal_code": ["邮政编码", "邮编", "邮递区号", "postal code", "zip code"],
 
     "education[0].school": ["毕业院校", "最高学历院校", "研究生院校", "硕士院校", "学校", "院校", "university", "school", "college"],
+    "education[0].school_location_type": ["办学属地", "学校办学属地", "院校办学属地", "办学所在地", "学校属地"],
+    "education[0].school_location": ["学校所在地", "院校所在地", "学校地点", "院校地点"],
     "education[0].degree": ["学历", "最高学历", "全日制最高学历", "最高全日制学历", "研究生学历", "硕士学历", "education level"],
     "education[0].academic_degree": ["学位", "最高学位", "研究生学位", "硕士学位", "academic degree"],
     "education[0].college": ["研究生院系", "硕士院系", "最高学历院系", "院系", "学院"],
     "education[0].major": ["专业", "所学专业", "最高学历专业", "研究生专业", "硕士专业", "major", "field of study"],
     "education[0].research_direction": ["研究方向", "硕士研究方向", "研究生研究方向", "research direction", "research area"],
     "education[0].courses": ["专业课程", "主要课程", "研究生专业课程", "硕士专业课程", "major courses", "core courses"],
+    "education[0].study_form": ["学习形式", "学习方式", "就读形式", "研究生学习形式", "硕士学习形式"],
     "education[0].start_date": ["研究生入学时间", "硕士入学时间", "最高学历入学时间", "入学时间", "入学日期", "enrollment date"],
     "education[0].end_date": ["毕业时间", "预计毕业时间", "最高学历毕业时间", "研究生毕业时间", "graduation date"],
     "education[0].expected_degree_date": ["拟取得学位时间", "预计取得学位时间", "学位取得时间", "预计获得学位时间"],
@@ -207,33 +216,48 @@ FIELD_DEFS: Dict[str, List[str]] = {
     "education[0].ranking": ["研究生成绩排名", "最高学历成绩排名", "成绩排名", "专业排名", "ranking", "class rank"],
     "education[0].education_type": ["受教育类型", "教育类型", "研究生受教育类型", "硕士受教育类型"],
     "education[0].study_length_years": ["学制", "研究生学制", "硕士学制", "学制年限"],
+    "education[0].integrated_training": ["是否贯通式培养", "贯通式培养", "贯通培养", "是否贯通培养", "研究生是否贯通式培养"],
+    "education[0].discipline_category": ["学科属性", "学科门类", "学科类别", "所属学科", "研究生学科属性"],
+    "education[0].training_mode": ["培养方式", "培养类型", "培养类别", "研究生培养方式"],
     "education[0].overseas_study_experience": ["该段教育经历内是否有海外学习经历", "是否有海外学习经历", "海外学习经历", "海外经历"],
     "education[0].graduation_project": ["硕士毕业设计", "硕士毕业论文", "毕业设计", "毕业论文题目", "毕业课题"],
 
     "education[1].school": ["本科院校", "本科学校", "本科毕业院校", "本科就读学校", "undergraduate school", "bachelor university"],
+    "education[1].school_location_type": ["本科办学属地", "本科院校办学属地", "办学属地", "学校办学属地", "院校办学属地"],
+    "education[1].school_location": ["本科学校所在地", "本科院校所在地", "学校所在地", "院校所在地"],
     "education[1].degree": ["本科学历", "本科层次", "本科教育学历", "undergraduate education level"],
     "education[1].academic_degree": ["本科学位", "学士学位", "本科教育学位", "undergraduate degree", "bachelor degree"],
     "education[1].college": ["本科院系", "本科院系名称", "本科所在学院"],
     "education[1].major": ["本科专业", "本科所学专业", "undergraduate major"],
     "education[1].courses": ["本科专业课程", "本科主要课程", "本科课程", "undergraduate courses"],
+    "education[1].study_form": ["本科学习形式", "本科就读形式", "学习形式", "学习方式", "就读形式"],
     "education[1].start_date": ["本科入学时间", "本科开始时间"],
     "education[1].end_date": ["本科毕业时间", "本科结束时间"],
     "education[1].ranking": ["本科成绩排名", "本科专业排名"],
     "education[1].education_type": ["本科受教育类型", "本科教育类型"],
     "education[1].study_length_years": ["本科学制", "本科学制年限"],
+    "education[1].integrated_training": ["本科是否贯通式培养", "本科贯通式培养", "是否贯通式培养", "贯通式培养", "贯通培养"],
+    "education[1].discipline_category": ["本科学科属性", "本科学科门类", "学科属性", "学科门类", "学科类别"],
+    "education[1].training_mode": ["本科培养方式", "本科培养类型", "培养方式", "培养类型", "培养类别"],
     "education[1].overseas_study_experience": ["本科是否有海外学习经历", "本科海外学习经历"],
     "education[1].graduation_project": ["本科毕业设计", "本科毕业论文", "本科毕业课题"],
 
     # 高中教育经历。通用标签（如“学校名称”“入学时间”）只在页面上下文明示“高中/中学”时参与匹配，
     # 防止与硕士、本科教育经历发生冲突。
     "education[2].school": ["高中学校", "高中学校名称", "高中院校", "中学名称", "学校名称", "学校"],
+    "education[2].school_location_type": ["高中办学属地", "高中学校办学属地", "办学属地"],
+    "education[2].school_location": ["高中所在地", "高中学校所在地", "中学所在地", "学校所在地", "院校所在地"],
     "education[2].degree": ["高中学历", "高中教育学历", "学历"],
+    "education[2].study_form": ["高中学习形式", "高中就读形式", "学习形式", "学习方式"],
     "education[2].academic_degree": ["高中学位", "高中教育学位", "学位"],
     "education[2].start_date": ["高中入学时间", "高中开始时间", "入学时间"],
     "education[2].end_date": ["高中毕业时间", "高中结束时间", "毕业时间"],
     "education[2].ranking": ["高中年级排名", "高中成绩排名", "年级排名"],
     "education[2].education_type": ["高中受教育类型", "高中教育类型", "受教育类型"],
     "education[2].study_length_years": ["高中学制", "高中学制年限", "学制"],
+    "education[2].integrated_training": ["高中是否贯通式培养", "是否贯通式培养", "贯通式培养"],
+    "education[2].discipline_category": ["高中学科属性", "学科属性", "学科门类"],
+    "education[2].training_mode": ["高中培养方式", "培养方式", "培养类型"],
     "education[2].full_time": ["高中是否全日制", "是否全日制"],
     "education[2].is_main_study_experience": ["高中是否主要学习经历", "是否主要学习经历", "主要学习经历"],
     "education[2].school_country": ["高中学校所属国家", "学校所属国家", "学校国家", "就读国家"],
@@ -593,7 +617,7 @@ def init_db() -> None:
 
 init_db()
 
-app = FastAPI(title="Job Autofill Local Service", version="1.4.4")
+app = FastAPI(title="Job Autofill Local Service", version="1.5.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -726,8 +750,10 @@ def alias_score(text: str, alias: str) -> float:
 
 
 GENERIC_EDUCATION_ALIASES = {
-    "学校", "学校名称", "院校", "学历", "学位", "院系", "学院", "专业",
-    "研究方向", "专业课程", "主要课程", "学习形式", "培养方式", "学科属性",
+    "学校", "学校名称", "院校", "办学属地", "学校所在地", "院校所在地",
+    "学历", "学位", "院系", "学院", "专业", "研究方向", "专业课程", "主要课程",
+    "学习形式", "学习方式", "就读形式", "是否贯通式培养", "贯通式培养",
+    "培养方式", "培养类型", "学科属性", "学科门类", "学科类别",
     "入学时间", "入学日期", "毕业时间", "毕业日期", "年级排名", "成绩排名",
     "绩点", "gpa", "是否全日制", "受教育类型", "教育类型", "学制",
 }
@@ -779,8 +805,11 @@ def education_index_from_peer_values(field: FieldInfo, profile: Dict[str, Any]) 
         ("college", 2.5),
         ("major", 2.5),
         ("research_direction", 2.0),
+        ("school_location", 1.5),
         ("degree", 1.0),
         ("academic_degree", 1.0),
+        ("study_form", 0.8),
+        ("study_length_years", 0.8),
     )
 
     scores: List[tuple[int, float]] = []
@@ -901,12 +930,16 @@ def local_match(field: FieldInfo, profile: Dict[str, Any]) -> Optional[MatchResu
             if key.startswith("education[2].") and alias in high_school_generic_aliases and not high_school_context:
                 continue
 
-            score = alias_score(text, alias)
+            identity_text = " ".join(filter(None, [field.label, field.placeholder, field.name]))
+            identity_score = alias_score(identity_text, alias)
+            score = max(alias_score(text, alias), identity_score)
 
+            # 教育记录下标一致只能给“当前字段自身也像这个 alias”的候选加分。
+            # 避免 context 里的学校名称/院校文字把“办学属地”等字段抢走。
             if edu_idx is not None and inferred_education_idx is not None:
-                if edu_idx == inferred_education_idx:
+                if edu_idx == inferred_education_idx and identity_score >= 0.74:
                     score = min(1.0, score + 0.14)
-                else:
+                elif edu_idx != inferred_education_idx:
                     score *= 0.55
 
             if high_school_context and key.startswith("education[2]."):

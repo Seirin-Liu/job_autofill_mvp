@@ -1440,11 +1440,15 @@
     for (const [key, label] of Object.entries(basicLabels)) pushPickerItem(items, '基本信息', label, `basic.${key}`, profile.basic?.[key]);
 
     const eduLabels = {
-      school: '学校名称', degree: '学历', academic_degree: '学位', college: '院系', major: '专业', research_direction: '研究方向', courses: '专业课程',
+      school: '学校名称', school_location_type: '办学属地', school_location: '学校所在地',
+      degree: '学历', academic_degree: '学位', college: '院系', major: '专业',
+      research_direction: '研究方向', courses: '专业课程', study_form: '学习形式',
       start_date: '入学时间', end_date: '毕业时间', expected_degree_date: '拟取得学位时间',
       first_degree: '第一学位', full_time: '是否全日制', exchange_program: '合作交流项目',
       gpa: 'GPA', ranking: '专业/年级排名', education_type: '受教育类型',
-      study_length_years: '学制', overseas_study_experience: '海外学习经历',
+      study_length_years: '学制', integrated_training: '是否贯通式培养',
+      discipline_category: '学科属性', training_mode: '培养方式',
+      overseas_study_experience: '海外学习经历',
       school_country: '学校所属国家', is_main_study_experience: '是否主要学习经历',
       graduation_project: '毕业设计/论文'
     };
